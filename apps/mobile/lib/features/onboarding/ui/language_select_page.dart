@@ -34,20 +34,20 @@ class LanguageSelectPage extends ConsumerWidget {
             style: AppText.body.copyWith(color: AppThemeColors.textMuted),
           ),
           const SizedBox(height: AppTokens.s24),
-          Row(
+          Wrap(
+            spacing: AppTokens.s12,
+            runSpacing: AppTokens.s12,
             children: [
               AppChip(
                 label: trKey('lang.en', mode, fallback: 'English'),
                 isActive: mode == LanguageMode.en,
                 onTap: () => ref.read(languageModeProvider.notifier).setMode(LanguageMode.en),
               ),
-              const SizedBox(width: AppTokens.s12),
               AppChip(
                 label: trKey('lang.mr', mode, fallback: 'Marathi'),
                 isActive: mode == LanguageMode.mr,
                 onTap: () => ref.read(languageModeProvider.notifier).setMode(LanguageMode.mr),
               ),
-              const SizedBox(width: AppTokens.s12),
               AppChip(
                 label: trKey('lang.hi', mode, fallback: 'Hindi'),
                 isActive: mode == LanguageMode.hi,

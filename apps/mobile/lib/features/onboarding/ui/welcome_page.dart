@@ -21,6 +21,15 @@ class WelcomePage extends ConsumerWidget {
     final mode = ref.watch(languageModeProvider);
     return AppScaffold(
       title: trKey('ui.welcome', mode, fallback: 'Welcome'),
+      appBarActions: [
+        TextButton(
+          onPressed: () => _goToCity(context, returnTo),
+          child: Text(
+            trKey('ui.skip', mode, fallback: 'Skip'),
+            style: AppText.caption.copyWith(color: AppThemeColors.textMuted),
+          ),
+        ),
+      ],
       body: ListView(
         children: [
           Text(
