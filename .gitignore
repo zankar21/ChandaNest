@@ -3,3 +3,4 @@
 **/secrets/**
 **/.auth/**
 services/api/service-account.json
+**/node_modules/
