@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.enterprisesRouter = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../../middlewares/auth.middleware");
+const membership_middleware_1 = require("../memberships/membership.middleware");
+const enterprises_controller_1 = require("./enterprises.controller");
+exports.enterprisesRouter = (0, express_1.Router)({ mergeParams: true });
+exports.enterprisesRouter.post("/", auth_middleware_1.authMiddleware, membership_middleware_1.requireTenantAdmin, enterprises_controller_1.createEnterpriseHandler);
+exports.enterprisesRouter.get("/", auth_middleware_1.authMiddleware, enterprises_controller_1.listEnterprisesHandler);
+exports.enterprisesRouter.get("/:enterpriseId", auth_middleware_1.authMiddleware, enterprises_controller_1.getEnterpriseHandler);
+exports.enterprisesRouter.post("/:enterpriseId/members", auth_middleware_1.authMiddleware, (0, membership_middleware_1.requireOrgMembership)("enterprise", "enterpriseId"), (0, membership_middleware_1.requirePermission)("members.manage"), enterprises_controller_1.addEnterpriseMemberHandler);
+exports.enterprisesRouter.patch("/:enterpriseId/members/:membershipId", auth_middleware_1.authMiddleware, (0, membership_middleware_1.requireOrgMembership)("enterprise", "enterpriseId"), (0, membership_middleware_1.requirePermission)("members.manage"), enterprises_controller_1.updateEnterpriseMemberHandler);
+exports.enterprisesRouter.get("/:enterpriseId/members", auth_middleware_1.authMiddleware, (0, membership_middleware_1.requireOrgMembership)("enterprise", "enterpriseId"), (0, membership_middleware_1.requirePermission)("members.read"), enterprises_controller_1.listEnterpriseMembersHandler);

@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.orgDocsRouter = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../../middlewares/auth.middleware");
+const orgDocs_controller_1 = require("./orgDocs.controller");
+exports.orgDocsRouter = (0, express_1.Router)({ mergeParams: true });
+exports.orgDocsRouter.post("/", auth_middleware_1.authMiddleware, orgDocs_controller_1.createOrgDocHandler);
+exports.orgDocsRouter.get("/", auth_middleware_1.authMiddleware, orgDocs_controller_1.listOrgDocsHandler);
+exports.orgDocsRouter.patch("/:docId", auth_middleware_1.authMiddleware, orgDocs_controller_1.updateOrgDocHandler);

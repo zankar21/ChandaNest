@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "475390593646",
+    "project_id": "chandanest-dev",
+    "storage_bucket": "chandanest-dev.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:475390593646:android:d324b577fe1ade8062747f",
+        "android_client_info": {
+          "package_name": "in.chandanest.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDKZfIGIeDXYyt9PaFRewEI0NcDRy7IpCs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

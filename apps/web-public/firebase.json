@@ -1,0 +1,43 @@
+{
+  "hosting": {
+    "public": "dist",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "redirects": [
+      {
+        "source": "/:path*",
+        "host": "chandanest.in",
+        "destination": "https://www.chandanest.in/:path*",
+        "type": 301
+      },
+      {
+        "source": "/:path*",
+        "host": "chandanest-in.web.app",
+        "destination": "https://www.chandanest.in/:path*",
+        "type": 301
+      },
+      {
+        "source": "/:path*",
+        "host": "chandanest-in.firebaseapp.com",
+        "destination": "https://www.chandanest.in/:path*",
+        "type": 301
+      }
+    ],
+    "headers": [
+      {
+        "source": "/sitemap.xml",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=3600" }
+        ]
+      },
+      {
+        "source": "/robots.txt",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=3600" }
+        ]
+      }
+    ],
+    "rewrites": [
+      { "source": "**", "destination": "/index.html" }
+    ]
+  }
+}

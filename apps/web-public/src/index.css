@@ -1,0 +1,142 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root,
+  .theme-dark {
+    --bg: #0B1220;
+    --bg-deep: #070B14;
+    --bg-glow: #1B2A46;
+    --surface-1: rgba(255, 255, 255, 0.05);
+    --surface-2: rgba(255, 255, 255, 0.07);
+    --surface-3: rgba(255, 255, 255, 0.09);
+    --border: rgba(255, 255, 255, 0.10);
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --text: rgba(255, 255, 255, 0.92);
+    --text-2: rgba(255, 255, 255, 0.70);
+    --text-3: rgba(255, 255, 255, 0.52);
+    --accent: #4F46E5;
+    --accent-hover: #6366F1;
+    --accent-glow: rgba(99, 102, 241, 0.35);
+  }
+
+  body {
+    background: linear-gradient(180deg, var(--bg) 0%, var(--bg) 40%, var(--bg-deep) 100%);
+    color: var(--text);
+  }
+
+  input,
+  select,
+  textarea {
+    background-color: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--text-3);
+  }
+}
+
+@layer utilities {
+  .bg-app {
+    background: linear-gradient(180deg, var(--bg) 0%, var(--bg) 40%, var(--bg-deep) 100%);
+  }
+
+  .card-glass {
+    background-color: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(16px);
+  }
+
+  .card-glass-strong {
+    background-color: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 1rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(16px);
+  }
+
+  .bg-surface {
+    background-color: var(--surface-2);
+  }
+
+  .bg-surface-strong {
+    background-color: var(--surface-3);
+  }
+
+  .border-theme {
+    border-color: var(--border);
+  }
+
+  .border-strong {
+    border-color: var(--border-strong);
+  }
+
+  .hover-border-theme:hover {
+    border-color: var(--border);
+  }
+
+  .hover-border-strong:hover {
+    border-color: var(--border-strong);
+  }
+
+  .text-primary {
+    color: var(--text);
+  }
+
+  .text-secondary {
+    color: var(--text-2);
+  }
+
+  .text-muted {
+    color: var(--text-3);
+  }
+
+  .btn-primary {
+    background-color: var(--accent);
+    color: #ffffff;
+    box-shadow: 0 10px 30px var(--accent-glow);
+  }
+
+  .btn-primary:hover {
+    background-color: var(--accent-hover);
+  }
+
+  .btn-secondary {
+    background-color: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .btn-ghost {
+    background-color: transparent;
+    border: 1px solid transparent;
+    color: var(--text-2);
+  }
+
+  .input-glass {
+    background-color: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .input-glass:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--accent-glow);
+    border-color: var(--accent);
+  }
+
+  .table-surface {
+    background-color: var(--surface-3);
+    border: 1px solid var(--border);
+  }
+}
+
+body {
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}

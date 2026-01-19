@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.orgVerificationRouter = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../../middlewares/auth.middleware");
+const orgVerification_controller_1 = require("./orgVerification.controller");
+exports.orgVerificationRouter = (0, express_1.Router)({ mergeParams: true });
+exports.orgVerificationRouter.get("/:orgType/:orgId", auth_middleware_1.authMiddleware, orgVerification_controller_1.getVerificationCaseHandler);
+exports.orgVerificationRouter.post("/:orgType/:orgId/init", auth_middleware_1.authMiddleware, orgVerification_controller_1.initVerificationCaseHandler);
+exports.orgVerificationRouter.post("/:orgType/:orgId/decide", auth_middleware_1.authMiddleware, orgVerification_controller_1.decideVerificationHandler);

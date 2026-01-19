@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.enterpriseInventoryRouter = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../../middlewares/auth.middleware");
+const membership_middleware_1 = require("../memberships/membership.middleware");
+const enterpriseInventory_controller_1 = require("./enterpriseInventory.controller");
+exports.enterpriseInventoryRouter = (0, express_1.Router)({ mergeParams: true });
+exports.enterpriseInventoryRouter.post("/", auth_middleware_1.authMiddleware, (0, membership_middleware_1.requireOrgMembership)("enterprise", "enterpriseId"), (0, membership_middleware_1.requirePermission)("enterprise.inventory.manage"), enterpriseInventory_controller_1.createInventoryItemHandler);
+exports.enterpriseInventoryRouter.get("/", auth_middleware_1.authMiddleware, (0, membership_middleware_1.requireOrgMembership)("enterprise", "enterpriseId"), (0, membership_middleware_1.requirePermission)("enterprise.inventory.read"), enterpriseInventory_controller_1.listInventoryItemsHandler);
+exports.enterpriseInventoryRouter.get("/:itemId", auth_middleware_1.authMiddleware, (0, membership_middleware_1.requireOrgMembership)("enterprise", "enterpriseId"), (0, membership_middleware_1.requirePermission)("enterprise.inventory.read"), enterpriseInventory_controller_1.getInventoryItemHandler);
+exports.enterpriseInventoryRouter.patch("/:itemId", auth_middleware_1.authMiddleware, (0, membership_middleware_1.requireOrgMembership)("enterprise", "enterpriseId"), (0, membership_middleware_1.requirePermission)("enterprise.inventory.manage"), enterpriseInventory_controller_1.updateInventoryItemHandler);
+exports.enterpriseInventoryRouter.patch("/:itemId/status", auth_middleware_1.authMiddleware, (0, membership_middleware_1.requireOrgMembership)("enterprise", "enterpriseId"), (0, membership_middleware_1.requirePermission)("enterprise.inventory.manage"), enterpriseInventory_controller_1.updateInventoryStatusHandler);

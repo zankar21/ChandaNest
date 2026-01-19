@@ -1,0 +1,5 @@
+*.sa.json
+*.serviceaccount.json
+**/secrets/**
+**/.auth/**
+services/api/service-account.json

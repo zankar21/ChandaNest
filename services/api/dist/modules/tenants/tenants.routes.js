@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.tenantsRouter = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../../middlewares/auth.middleware");
+const appCheck_middleware_1 = require("../../middlewares/appCheck.middleware");
+const tenants_controller_1 = require("./tenants.controller");
+exports.tenantsRouter = (0, express_1.Router)({ mergeParams: true });
+exports.tenantsRouter.get("/tenants/:tenantId/me", auth_middleware_1.authMiddleware, tenants_controller_1.getMeHandler);
+exports.tenantsRouter.post("/tenants/:tenantId/kyc/phone/complete", auth_middleware_1.authMiddleware, appCheck_middleware_1.requireAppCheckForWrites, tenants_controller_1.completePhoneKycHandler);
+exports.tenantsRouter.post("/tenants/:tenantId/owner/onboard", auth_middleware_1.authMiddleware, appCheck_middleware_1.requireAppCheckForWrites, tenants_controller_1.onboardOwnerHandler);

@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.enterpriseProjectsRouter = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../../middlewares/auth.middleware");
+const membership_middleware_1 = require("../memberships/membership.middleware");
+const enterpriseProjects_controller_1 = require("./enterpriseProjects.controller");
+exports.enterpriseProjectsRouter = (0, express_1.Router)({ mergeParams: true });
+exports.enterpriseProjectsRouter.post("/", auth_middleware_1.authMiddleware, (0, membership_middleware_1.requireOrgMembership)("enterprise", "enterpriseId"), (0, membership_middleware_1.requirePermission)("enterprise.projects.manage"), enterpriseProjects_controller_1.createEnterpriseProjectHandler);
+exports.enterpriseProjectsRouter.get("/", auth_middleware_1.authMiddleware, (0, membership_middleware_1.requireOrgMembership)("enterprise", "enterpriseId"), (0, membership_middleware_1.requirePermission)("enterprise.projects.read"), enterpriseProjects_controller_1.listEnterpriseProjectsHandler);
+exports.enterpriseProjectsRouter.get("/:projectId", auth_middleware_1.authMiddleware, (0, membership_middleware_1.requireOrgMembership)("enterprise", "enterpriseId"), (0, membership_middleware_1.requirePermission)("enterprise.projects.read"), enterpriseProjects_controller_1.getEnterpriseProjectHandler);
+exports.enterpriseProjectsRouter.patch("/:projectId", auth_middleware_1.authMiddleware, (0, membership_middleware_1.requireOrgMembership)("enterprise", "enterpriseId"), (0, membership_middleware_1.requirePermission)("enterprise.projects.manage"), enterpriseProjects_controller_1.updateEnterpriseProjectHandler);
