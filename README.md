@@ -1,6 +1,6 @@
-# ChandaNest – Enterprise Real Estate Platform
+﻿# ChandaNest - Enterprise Real Estate Platform
 
-ChandaNest is a **multi-tenant, enterprise-grade real estate SaaS** designed for
+ChandaNest is a multi-tenant, enterprise-grade real estate SaaS designed for
 Indian tier-2 cities, scalable globally.
 
 ## Platform Scope
@@ -9,25 +9,25 @@ Indian tier-2 cities, scalable globally.
 - Rental properties
 
 ## Applications
-- **web-public** → SEO-friendly public browsing (read-only)
-- **web-admin** → Secure admin dashboard
-- **mobile** → Flutter (planned)
+- web-public: SEO-friendly public browsing (read-only)
+- web-admin: Secure admin dashboard
+- mobile: Flutter app
 
 ## Core Principles
 - Strict separation between public and admin apps
 - Secure, scalable backend architecture
 - No Firebase download token URLs
-- Signed URL–based media access
+- Signed URL-based media access
 - Server-side authorization only
 
 ## Tech Stack
-**Backend**
+Backend
 - Node.js + TypeScript + Express
 - Firestore + Firebase Storage
 - Zod validation
 - Google Cloud Run
 
-**Frontend**
+Frontend
 - React + Vite + Tailwind CSS
 - TypeScript + Axios
 
@@ -37,7 +37,7 @@ Indian tier-2 cities, scalable globally.
 - App Check enforced only on sensitive admin write operations
 
 ## Media Handling
-- Firestore stores only `objectPath`
+- Firestore stores only objectPath
 - Images rendered using signed GET URLs
 - Uploads via signed PUT URLs
 - Backend never proxies file bytes
@@ -53,9 +53,12 @@ gsutil cors get gs://chandanest-dev.firebasestorage.app
 ```
 
 ## Governance
-⚠️ **AGENTS.md is the final authority for this repository.**  
+AGENTS.md is the final authority for this repository.
 All contributors must read it before making changes.
+
+## Workflow
+- After making any code changes, commit and push to GitHub.
 
 ---
 
-© PowerPulse Technologies
+Ac PowerPulse Technologies
