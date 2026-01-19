@@ -5,10 +5,12 @@ class LocalStore {
   static const _cityKey = 'selected_city_slug';
   static const _savedKey = 'saved_ids';
   static const _languageKey = 'language_mode';
+  static const _onboardingKey = 'onboarding_done';
 
   String? _cachedCity;
   Set<String>? _cachedSaved;
   String? _cachedLanguage;
+  bool? _cachedOnboardingDone;
 
   Future<String?> getCitySlug() async {
     if (_cachedCity != null) return _cachedCity;
@@ -58,5 +60,18 @@ class LocalStore {
 
   Future<void> setLanguageMode(LanguageMode mode) async {
     await setLanguageCode(languageModeToCode(mode));
+  }
+
+  Future<bool> getOnboardingDone() async {
+    if (_cachedOnboardingDone != null) return _cachedOnboardingDone!;
+    final prefs = await SharedPreferences.getInstance();
+    _cachedOnboardingDone = prefs.getBool(_onboardingKey) ?? false;
+    return _cachedOnboardingDone!;
+  }
+
+  Future<void> setOnboardingDone(bool value) async {
+    _cachedOnboardingDone = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_onboardingKey, value);
   }
 }

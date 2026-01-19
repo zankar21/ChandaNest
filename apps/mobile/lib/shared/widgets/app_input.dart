@@ -17,6 +17,8 @@ class AppInput extends StatelessWidget {
     this.maxLines = 1,
     this.minLines,
     this.validator,
+    this.backgroundColor,
+    this.borderColor,
   });
 
   final TextEditingController? controller;
@@ -30,15 +32,17 @@ class AppInput extends StatelessWidget {
   final int maxLines;
   final int? minLines;
   final String? Function(String?)? validator;
+  final Color? backgroundColor;
+  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       height: 54,
       decoration: BoxDecoration(
-        color: AppThemeColors.bg1.withAlpha(220),
+        color: backgroundColor ?? AppThemeColors.bg1.withAlpha(220),
         borderRadius: BorderRadius.circular(AppTokens.r16),
-        border: Border.all(color: AppTokens.stroke),
+        border: Border.all(color: borderColor ?? AppTokens.stroke),
       ),
       child: TextFormField(
         controller: controller,

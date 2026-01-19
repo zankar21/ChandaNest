@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../../features/city/ui/city_picker_page.dart';
 import '../../features/public_home/ui/home_page.dart';
 import '../../features/public_home/ui/splash_page.dart';
+import '../../features/onboarding/ui/welcome_page.dart';
+import '../../features/onboarding/ui/city_select_page.dart';
+import '../../features/onboarding/ui/language_select_page.dart';
 import '../../features/explore/ui/explore_page.dart';
 import '../../features/map_view/ui/map_page.dart';
 import '../../features/saved/ui/saved_page.dart';
@@ -22,6 +25,7 @@ import '../../features/agency/ui/agency_dashboard_page.dart';
 import '../../features/enterprise/ui/enterprise_dashboard_page.dart';
 import '../../features/authz/ui/access_denied_page.dart';
 import '../auth/claims_parser.dart';
+import '../storage/local_store.dart';
 import 'role_guard.dart';
 import 'routes.dart';
 
@@ -42,7 +46,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: AppRoutes.splash,
     refreshListenable: ref.watch(authRouterRefreshProvider),
-    redirect: (context, state) {
+    redirect: (context, state) async {
       final isOwnerRoute = state.matchedLocation.startsWith('/owner');
       final isAgentRoute = state.matchedLocation.startsWith('/agent');
       final isAgencyRoute = state.matchedLocation.startsWith('/agency');
@@ -53,6 +57,34 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (requiresAuth && !isLogin && !loggedIn) {
         final returnTo = Uri.encodeComponent(state.uri.toString());
         return '${AppRoutes.ownerLogin}?returnTo=$returnTo';
+      }
+      final isSplash = state.matchedLocation == AppRoutes.splash;
+      final isWelcome = state.matchedLocation == AppRoutes.welcome;
+      final isOnboardingCity = state.matchedLocation == AppRoutes.onboardingCity;
+      final isOnboardingLang = state.matchedLocation == AppRoutes.onboardingLanguage;
+      final isOnboarding = isWelcome || isOnboardingCity || isOnboardingLang;
+      final store = LocalStore();
+      final onboardingDone = await store.getOnboardingDone();
+      if (onboardingDone && isOnboarding) {
+        return AppRoutes.home;
+      }
+      if (!onboardingDone) {
+        final citySlug = await store.getCitySlug();
+        final languageCode = await store.getLanguageCode();
+        final returnTo = state.uri.queryParameters['returnTo'] ?? state.uri.toString();
+        final encoded = Uri.encodeComponent(returnTo);
+        if (!isSplash && !isOnboarding) {
+          if (citySlug == null || citySlug.isEmpty) {
+            return '${AppRoutes.onboardingCity}?returnTo=$encoded';
+          }
+          if (languageCode == null || languageCode.isEmpty) {
+            return '${AppRoutes.onboardingLanguage}?returnTo=$encoded';
+          }
+          await store.setOnboardingDone(true);
+        }
+        if (isOnboardingLang && (citySlug == null || citySlug.isEmpty)) {
+          return '${AppRoutes.onboardingCity}?returnTo=$encoded';
+        }
       }
       if (loggedIn && !isAccessDenied) {
         final claims = ref.read(claimsProvider).valueOrNull;
@@ -69,6 +101,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.splash,
         builder: (context, state) => const SplashPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.welcome,
+        builder: (context, state) => WelcomePage(
+          returnTo: state.uri.queryParameters['returnTo'],
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.onboardingCity,
+        builder: (context, state) => CitySelectPage(
+          returnTo: state.uri.queryParameters['returnTo'],
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.onboardingLanguage,
+        builder: (context, state) => LanguageSelectPage(
+          returnTo: state.uri.queryParameters['returnTo'],
+        ),
       ),
       GoRoute(
         path: AppRoutes.city,

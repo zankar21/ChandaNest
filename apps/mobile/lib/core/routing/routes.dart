@@ -1,5 +1,8 @@
 ﻿class AppRoutes {
   static const splash = '/splash';
+  static const welcome = '/welcome';
+  static const onboardingCity = '/onboarding/city';
+  static const onboardingLanguage = '/onboarding/language';
   static const city = '/city';
   static const home = '/home';
   static const explore = '/explore';

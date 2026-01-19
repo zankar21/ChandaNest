@@ -15,67 +15,83 @@ class SearchHero extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mode = ref.watch(languageModeProvider);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final heroWidth = screenWidth + (AppTokens.s16 * 2);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          height: 300,
-          margin: const EdgeInsets.symmetric(horizontal: -AppTokens.s16),
-          width: double.infinity,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Image.asset(
-                'assets/brand/home_hero.png',
-                fit: BoxFit.cover,
-              ),
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0x110B0F18), Color(0x990B0F18), Color(0xE60B0F18)],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
+        SizedBox(
+          height: 272,
+          width: heroWidth,
+          child: Transform.translate(
+            offset: const Offset(-AppTokens.s16, 0),
+            child: SizedBox(
+              width: heroWidth,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(
+                    'assets/brand/home_hero.png',
+                    fit: BoxFit.cover,
                   ),
-                ),
-              ),
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: Alignment(0.2, -0.2),
-                    radius: 1.2,
-                    colors: [Color(0x33000000), Color(0xCC000000)],
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0x110B0F18), Color(0x990B0F18), Color(0xE60B0F18)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppTokens.s16, vertical: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 8),
-                      Text(
-                        trKey('ui.find_next_place', mode, fallback: 'Find your next place'),
-                        style: AppText.titleXL.copyWith(color: Colors.white),
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        center: Alignment(0.2, -0.2),
+                        radius: 1.2,
+                        colors: [Color(0x33000000), Color(0xCC000000)],
                       ),
-                      const SizedBox(height: AppTokens.s16),
-                      AppInput(
-                        readOnly: true,
-                        onTap: () => context.go(AppRoutes.explore),
-                        hintText: trKey('ui.search_hint', mode, fallback: 'Search by area, landmark, or builder'),
-                        prefixIcon: Icons.search,
-                      ),
-                      const SizedBox(height: AppTokens.s8),
-                      Text(
-                        'Verified listings across your city',
-                        style: AppText.caption.copyWith(color: Colors.white70),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
+                  SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppTokens.s16, vertical: 18),
+                      child: Container(
+                        padding: const EdgeInsets.all(AppTokens.s16),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withAlpha(80),
+                          borderRadius: BorderRadius.circular(AppTokens.r20),
+                          border: Border.all(color: Colors.white10),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              trKey('ui.find_next_place', mode, fallback: 'Find your next place'),
+                              style: AppText.titleXL.copyWith(color: Colors.white),
+                            ),
+                            const SizedBox(height: AppTokens.s12),
+                            AppInput(
+                              readOnly: true,
+                              onTap: () => context.go(AppRoutes.explore),
+                              hintText: trKey('ui.search_hint', mode, fallback: 'Search by area, landmark, or builder'),
+                              prefixIcon: Icons.search,
+                              backgroundColor: Colors.white.withAlpha(18),
+                              borderColor: Colors.white24,
+                            ),
+                            const SizedBox(height: AppTokens.s8),
+                            Text(
+                              'Verified listings across your city',
+                              style: AppText.body.copyWith(color: Colors.white70),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
         Transform.translate(
@@ -107,6 +123,19 @@ class SearchHero extends ConsumerWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+        ),
+        Container(
+          margin: const EdgeInsets.only(left: AppTokens.s16, right: AppTokens.s16, top: AppTokens.s8),
+          height: 1,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.white.withAlpha(0),
+                Colors.white.withAlpha(90),
+                Colors.white.withAlpha(0),
+              ],
             ),
           ),
         ),

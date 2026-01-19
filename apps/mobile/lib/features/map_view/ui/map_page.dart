@@ -6,6 +6,7 @@ import '../../../shared/widgets/app_bottom_nav.dart';
 import '../../../shared/widgets/property_card.dart';
 import '../../../shared/widgets/skeletons.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/app_button.dart';
 import '../../../shared/theme/tokens.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/theme/app_text.dart';
@@ -204,6 +205,21 @@ class _MapBottomSheet extends StatelessWidget {
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
+              ),
+              const SizedBox(height: AppTokens.s12),
+              AppButton(
+                label: trKey('ui.use_my_location', mode, fallback: 'Use my location'),
+                style: AppButtonStyle.secondary,
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        trKey('ui.location_prompt', mode, fallback: 'Location permission will be requested here.'),
+                      ),
+                    ),
+                  );
+                },
+                fullWidth: true,
               ),
               const SizedBox(height: AppTokens.s12),
               Text(trKey('ui.nearby_listings', mode, fallback: 'Nearby listings'), style: AppText.titleM),
