@@ -31,42 +31,45 @@ class CitySelectPage extends ConsumerWidget {
     final mode = ref.watch(languageModeProvider);
     return AppScaffold(
       title: trKey('ui.select_city', mode, fallback: 'Select city'),
-      body: ListView(
-        children: [
-          Text(
-            trKey('ui.city_headline', mode, fallback: 'Where are you exploring today?'),
-            style: AppText.titleL,
-          ),
-          const SizedBox(height: AppTokens.s12),
-          Text(
-            trKey('ui.city_subtitle', mode, fallback: 'Pick a city to personalize listings.'),
-            style: AppText.body.copyWith(color: AppThemeColors.textMuted),
-          ),
-          const SizedBox(height: AppTokens.s20),
-          ..._citySlugs.map((slug) => Padding(
-                padding: const EdgeInsets.only(bottom: AppTokens.s12),
-                child: AppCard(
-                  padding: const EdgeInsets.all(AppTokens.s16),
-                  child: Row(
-                    children: [
-                      Icon(Icons.location_city_outlined, color: AppThemeColors.primary),
-                      const SizedBox(width: AppTokens.s12),
-                      Expanded(
-                        child: Text(
-                          AppConstants.cityNameForSlug(slug),
-                          style: AppText.titleM,
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              trKey('ui.city_headline', mode, fallback: 'Where are you exploring today?'),
+              style: AppText.titleL,
+            ),
+            const SizedBox(height: AppTokens.s12),
+            Text(
+              trKey('ui.city_subtitle', mode, fallback: 'Pick a city to personalize listings.'),
+              style: AppText.body.copyWith(color: AppThemeColors.textMuted),
+            ),
+            const SizedBox(height: AppTokens.s20),
+            ..._citySlugs.map((slug) => Padding(
+                  padding: const EdgeInsets.only(bottom: AppTokens.s12),
+                  child: AppCard(
+                    padding: const EdgeInsets.all(AppTokens.s16),
+                    child: Row(
+                      children: [
+                        Icon(Icons.location_city_outlined, color: AppThemeColors.primary),
+                        const SizedBox(width: AppTokens.s12),
+                        Expanded(
+                          child: Text(
+                            AppConstants.cityNameForSlug(slug),
+                            style: AppText.titleM,
+                          ),
                         ),
-                      ),
-                      AppButton(
-                        label: trKey('ui.select', mode, fallback: 'Select'),
-                        style: AppButtonStyle.secondary,
-                        onPressed: () => _selectCity(context, ref, slug, returnTo),
-                      ),
-                    ],
+                        AppButton(
+                          label: trKey('ui.select', mode, fallback: 'Select'),
+                          style: AppButtonStyle.secondary,
+                          onPressed: () => _selectCity(context, ref, slug, returnTo),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              )),
-        ],
+                )),
+          ],
+        ),
       ),
     );
   }
