@@ -11,8 +11,6 @@ export type PlanDef = {
   custom?: boolean;
 };
 
-export const TRIAL_PUBLISH_LIMIT = 2;
-
 const PLANS: Record<PlanId, PlanDef> = {
   trial: {
     id: "trial",

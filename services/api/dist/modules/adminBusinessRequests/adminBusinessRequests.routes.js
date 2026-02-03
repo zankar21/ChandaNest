@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.adminBusinessRequestsRouter = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../../middlewares/auth.middleware");
+const adminBusinessRequests_controller_1 = require("./adminBusinessRequests.controller");
+exports.adminBusinessRequestsRouter = (0, express_1.Router)();
+exports.adminBusinessRequestsRouter.get("/", auth_middleware_1.authMiddleware, adminBusinessRequests_controller_1.listBusinessRequestsHandler);
+exports.adminBusinessRequestsRouter.post("/:id/approve", auth_middleware_1.authMiddleware, adminBusinessRequests_controller_1.approveBusinessRequestHandler);
+exports.adminBusinessRequestsRouter.post("/:id/reject", auth_middleware_1.authMiddleware, adminBusinessRequests_controller_1.rejectBusinessRequestHandler);

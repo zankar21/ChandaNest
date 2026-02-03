@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.mandatesRouter = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../../middlewares/auth.middleware");
+const mandates_controller_1 = require("./mandates.controller");
+exports.mandatesRouter = (0, express_1.Router)({ mergeParams: true });
+exports.mandatesRouter.post("/request", auth_middleware_1.authMiddleware, mandates_controller_1.requestMandateHandler);
+exports.mandatesRouter.get("/", auth_middleware_1.authMiddleware, mandates_controller_1.listMandatesHandler);
+exports.mandatesRouter.get("/:mandateId", auth_middleware_1.authMiddleware, mandates_controller_1.getMandateHandler);
+exports.mandatesRouter.post("/:mandateId/approve", auth_middleware_1.authMiddleware, mandates_controller_1.approveMandateHandler);
+exports.mandatesRouter.post("/:mandateId/reject", auth_middleware_1.authMiddleware, mandates_controller_1.rejectMandateHandler);
+exports.mandatesRouter.post("/:mandateId/revoke", auth_middleware_1.authMiddleware, mandates_controller_1.revokeMandateHandler);

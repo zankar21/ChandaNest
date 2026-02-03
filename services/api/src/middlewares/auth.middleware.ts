@@ -1,7 +1,6 @@
 import admin from "firebase-admin";
 import { Request, Response, NextFunction } from "express";
 import { firestore } from "../config/firebase";
-import { env } from "../config/env";
 import { logger } from "../utils/logger";
 import { AuthUser } from "../types";
 
@@ -55,42 +54,16 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
       (decoded as any).tenantId || (decoded as any)["https://example.com/tenantId"] || undefined;
     const roleClaim =
       (decoded as any).role || (decoded as any)["https://example.com/role"] || undefined;
-    const headerTenantId =
-      typeof req.headers["x-tenant-id"] === "string" ? req.headers["x-tenant-id"] : undefined;
 
     const fromDoc = await fetchTenantFromUserDoc(decoded.uid);
 
-    const requestPath = req.originalUrl || req.baseUrl || req.path || "";
-    const isAgentRoute = requestPath.includes("/v1/agent") || req.baseUrl?.includes("/v1/agent");
-    const resolvedFromMiddleware =
-      (req as Request & { tenantId?: string }).tenantId || res.locals?.tenantId || undefined;
     const resolvedTenantId = tenantIdClaim || fromDoc.tenantId || undefined;
     const allowPathTenant =
       req.path.includes("/owner/onboard") || req.path.endsWith("/me") ? req.params.tenantId : undefined;
-    const fallbackTenantId = isAgentRoute
-      ? env.publicMarketplaceTenantId || env.platformTenantId || undefined
-      : undefined;
-    let finalTenantId =
-      resolvedTenantId ||
-      resolvedFromMiddleware ||
-      headerTenantId ||
-      allowPathTenant ||
-      fallbackTenantId;
-    if (!finalTenantId && env.nodeEnv === "development") {
-      const host = typeof req.headers.host === "string" ? req.headers.host : "";
-      const origin = typeof req.headers.origin === "string" ? req.headers.origin : "";
-      const isLocalhost =
-        host.includes("localhost") ||
-        host.includes("127.0.0.1") ||
-        origin.includes("localhost") ||
-        origin.includes("127.0.0.1");
-      if (isLocalhost && isAgentRoute) {
-        finalTenantId = env.defaultTenantId || "powerpulsetech";
-      }
-    }
+    const finalTenantId = resolvedTenantId || allowPathTenant;
     if (!finalTenantId) {
       logger.warn("Tenant ID missing for user", decoded.uid);
-      return forbidden(res, "Tenant access not configured (missing x-tenant-id / host mapping)");
+      return forbidden(res, "Tenant access not configured");
     }
     const resolvedRole = roleClaim || fromDoc.role || "user";
 

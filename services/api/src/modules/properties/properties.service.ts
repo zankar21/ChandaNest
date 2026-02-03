@@ -5,8 +5,6 @@ import { removePublicProperty, upsertPublicProperty } from "../../services/publi
 import { logger } from "../../utils/logger";
 import { isSafeObjectPath, requireTenantScopedPath } from "../../utils/objectPath";
 import { AuthUser } from "../../types";
-import { TRIAL_PUBLISH_LIMIT } from "../billing/plans";
-import { fetchAgentSubscription } from "../agent/agent.subscription.service";
 import {
   buildBillingError,
   requireCapability,
@@ -49,14 +47,6 @@ type ListingDoc = Omit<CreatePropertyInput, "location" | "rental"> & {
 
 function listingsCollection(tenantId: string) {
   return firestore.collection("tenants").doc(tenantId).collection("listings");
-}
-
-export async function countPublishedListingsForUser(tenantId: string, userId: string) {
-  const snap = await listingsCollection(tenantId)
-    .where("visibility", "==", "published")
-    .where("createdBy.uid", "==", userId)
-    .get();
-  return snap.size;
 }
 
 function assertTenantAccess(user: AuthUser, tenantId: string) {
@@ -892,24 +882,7 @@ export async function publishProperty(input: { tenantId: string; propertyId: str
       })
     );
   } else {
-    const subscription = await requireCapability(tenantId, user, "PUBLISH");
-    const agentSubscription = await fetchAgentSubscription(tenantId, user.uid);
-    const agentStatus = agentSubscription?.status || "trial";
-    const agentPlan = agentSubscription?.planCode || "trial";
-    const isActiveAgentPlan = agentStatus === "active";
-    const isTrial = !isActiveAgentPlan || agentPlan === "trial";
-    if (isTrial && subscription?.limits?.publishAllowed !== false) {
-      const publishedCount = await countPublishedListingsForUser(tenantId, user.uid);
-      if (publishedCount >= TRIAL_PUBLISH_LIMIT) {
-        logger.warn("Trial publish limit reached", {
-          tenantId,
-          uid: user.uid,
-          publishedCount,
-          limit: TRIAL_PUBLISH_LIMIT
-        });
-        throw buildBillingError("Publish limit reached for trial plan", "PLAN_LIMIT_REACHED", 403);
-      }
-    }
+    await requireCapability(tenantId, user, "PUBLISH");
     validateSubmitPayload(data);
     await ref.update(
       deepStripUndefined({

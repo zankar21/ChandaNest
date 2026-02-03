@@ -35,19 +35,8 @@ const EnvSchema = z.object({
   IP_HASH_SALT: z.string().default("local-dev-salt"),
   INVITE_TOKEN_SALT: z.string().default("local-dev-invite-salt"),
   PLATFORM_ADMIN_UIDS: z.string().default(""),
-  ALLOW_DEV_AGENT_GRANT: z
-    .string()
-    .default("false")
-    .transform((value) => value === "true" || value === "1"),
-  DEFAULT_TENANT_ID: z.string().default(""),
   BILLING_PROVIDER: z.enum(["manual", "razorpay", "stripe"]).default("manual"),
-  TRIAL_DAYS: z.coerce.number().int().positive().default(14),
-  RAZORPAY_KEY_ID: z.string().default(""),
-  RAZORPAY_KEY_SECRET: z.string().default(""),
-  RAZORPAY_PLAN_AGENT_MONTHLY: z.string().default(""),
-  RAZORPAY_PLAN_PROFESSIONAL_MONTHLY: z.string().default(""),
-  RAZORPAY_WEBHOOK_SECRET: z.string().default(""),
-  CRON_KEY: z.string().default("")
+  TRIAL_DAYS: z.coerce.number().int().positive().default(14)
 });
 
 const parsed = EnvSchema.parse(process.env);
@@ -82,16 +71,8 @@ export const env = {
   ipHashSalt: parsed.IP_HASH_SALT,
   inviteTokenSalt: parsed.INVITE_TOKEN_SALT,
   platformAdminUids: parsed.PLATFORM_ADMIN_UIDS.split(",").map((uid) => uid.trim()).filter(Boolean),
-  allowDevAgentGrant: parsed.ALLOW_DEV_AGENT_GRANT,
-  defaultTenantId: parsed.DEFAULT_TENANT_ID || "",
   billingProvider: parsed.BILLING_PROVIDER,
-  trialDays: parsed.TRIAL_DAYS,
-  razorpayKeyId: parsed.RAZORPAY_KEY_ID,
-  razorpayKeySecret: parsed.RAZORPAY_KEY_SECRET,
-  razorpayPlanAgentMonthly: parsed.RAZORPAY_PLAN_AGENT_MONTHLY,
-  razorpayPlanProfessionalMonthly: parsed.RAZORPAY_PLAN_PROFESSIONAL_MONTHLY,
-  razorpayWebhookSecret: parsed.RAZORPAY_WEBHOOK_SECRET,
-  cronKey: parsed.CRON_KEY
+  trialDays: parsed.TRIAL_DAYS
 };
 
 export type Env = typeof env;

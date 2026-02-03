@@ -28,29 +28,16 @@ import { adminBusinessRequestsRouter } from "./modules/adminBusinessRequests/adm
 import { billingRouter } from "./modules/billing/billing.routes";
 import { teamRouter } from "./modules/team/team.routes";
 import aiDescriptionsRouter from "./modules/aiDescriptions/aiDescriptions.routes";
-import { razorpayWebhookRouter } from "./modules/webhooks/razorpay.routes";
-import { cronRouter } from "./modules/cron/cron.routes";
-import { devRouter } from "./modules/dev/dev.routes";
-import { agentRouter } from "./modules/agent/agent.routes";
-import { tenantResolver } from "./middlewares/tenant.middleware";
 
 const app = express();
 
 app.use(helmet());
-app.use(
-  express.json({
-    verify(_req, _res, buf) {
-      (_req as any).rawBody = buf;
-    }
-  })
-);
+app.use(express.json());
 app.use(
   cors({
-    origin: env.corsOrigins.length > 0 ? env.corsOrigins : undefined,
-    allowedHeaders: ["Content-Type", "Authorization", "x-tenant-id"]
+    origin: env.corsOrigins.length > 0 ? env.corsOrigins : undefined
   })
 );
-app.use("/v1", tenantResolver);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
@@ -59,10 +46,6 @@ app.get("/health", (_req, res) => {
 app.use("/v1/public", publicRouter);
 app.use("/v1/public", publicNearbyRouter);
 app.use("/v1/public", nearbyRouter);
-app.use("/v1", razorpayWebhookRouter);
-app.use("/v1", cronRouter);
-app.use("/v1", devRouter);
-app.use("/v1/agent", agentRouter);
 app.use("/v1/media", mediaRouter);
 app.use("/v1/kyc", kycRouter);
 app.use("/v1", projectsRouter);

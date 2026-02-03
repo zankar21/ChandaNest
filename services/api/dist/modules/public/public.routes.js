@@ -1,0 +1,16 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.publicRouter = void 0;
+const express_1 = require("express");
+const public_controller_1 = require("./public.controller");
+const properties_controller_1 = require("../properties/properties.controller");
+const leads_controller_1 = require("../leads/leads.controller");
+const publicBusinessRequests_1 = require("../publicBusinessRequests");
+const publicInvites_1 = require("../publicInvites");
+exports.publicRouter = (0, express_1.Router)();
+exports.publicRouter.get("/properties", properties_controller_1.publicListHandler);
+exports.publicRouter.get("/properties/:propertyId", properties_controller_1.publicGetHandler);
+exports.publicRouter.post("/media/sign-get", public_controller_1.publicSignGet);
+exports.publicRouter.post("/leads", leads_controller_1.publicCreateLeadHandler);
+exports.publicRouter.use("/business-requests", publicBusinessRequests_1.publicBusinessRequestsRouter);
+exports.publicRouter.use("/invites", publicInvites_1.publicInvitesRouter);

@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.teamRouter = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../../middlewares/auth.middleware");
+const team_controller_1 = require("./team.controller");
+exports.teamRouter = (0, express_1.Router)();
+exports.teamRouter.get("/me", auth_middleware_1.authMiddleware, team_controller_1.getTeamMeHandler);
+exports.teamRouter.get("/users", auth_middleware_1.authMiddleware, team_controller_1.listTeamUsersHandler);
+exports.teamRouter.post("/invites", auth_middleware_1.authMiddleware, team_controller_1.createTeamInviteHandler);
+exports.teamRouter.get("/invites", auth_middleware_1.authMiddleware, team_controller_1.listTeamInvitesHandler);
+exports.teamRouter.post("/invites/:inviteId/revoke", auth_middleware_1.authMiddleware, team_controller_1.revokeTeamInviteHandler);
+exports.teamRouter.post("/users/:uid/disable", auth_middleware_1.authMiddleware, team_controller_1.disableTeamUserHandler);
+exports.teamRouter.post("/users/:uid/enable", auth_middleware_1.authMiddleware, team_controller_1.enableTeamUserHandler);
