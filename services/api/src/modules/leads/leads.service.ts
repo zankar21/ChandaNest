@@ -3,6 +3,7 @@ import { firestore } from "../../config/firebase";
 import { env } from "../../config/env";
 import { AuthUser } from "../../types";
 import { hashIp } from "../../utils/rateLimit";
+import { hasPermission } from "../memberships/permissions";
 import {
   AdminLeadCreateSchema,
   AdminLeadUpdateSchema,
@@ -132,7 +133,10 @@ async function assertTenantLeadExists(tenantId: string, leadId: string) {
   return { ref, snap };
 }
 
-export async function createPublicLead(input: PublicLeadInput) {
+export async function createPublicLead(
+  input: PublicLeadInput,
+  deps?: { createLeadDoc?: (tenantId: string, doc: LeadDoc) => Promise<string> }
+) {
   const payload = PublicLeadCreateSchema.parse(input.body);
   if (payload.website) {
     return { leadId: "ignored", ignored: true };
@@ -180,9 +184,32 @@ export async function createPublicLead(input: PublicLeadInput) {
     updatedAt: now
   };
 
+  if (deps?.createLeadDoc) {
+    const leadId = await deps.createLeadDoc(tenantId, doc);
+    return { leadId };
+  }
   const ref = firestore.collection("tenants").doc(tenantId).collection("leads").doc();
   await ref.set(deepStripUndefined({ ...doc, id: ref.id }));
   return { leadId: ref.id };
+}
+
+export function canAccessLead(input: {
+  user: { uid: string; role?: string | null };
+  lead: { principalType?: string | null; principalId?: string | null };
+  memberships: { orgType?: string | null; orgId?: string | null; role?: string | null; status?: string | null }[];
+  permission: "leads.read" | "leads.manage";
+}): boolean {
+  const principalType = input.lead.principalType;
+  const principalId = input.lead.principalId;
+  if (!principalType || !principalId) return false;
+  const member = input.memberships.find(
+    (m) =>
+      m.orgType === principalType &&
+      m.orgId === principalId &&
+      (!m.status || m.status === "active")
+  );
+  if (!member) return false;
+  return hasPermission(member.role || undefined, input.permission);
 }
 
 export async function listLeads(input: ListInput) {
