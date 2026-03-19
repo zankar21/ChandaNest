@@ -1,523 +1,376 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { listListings, signGetMedia } from "../services/apiClient";
+import {
+  getBuilderCapSummary,
+  getAnalyticsSummary,
+  getBillingSubscription,
+  getTeamMe,
+  listListings
+} from "../services/apiClient";
+import { useDocumentLockerEntitlement } from "../hooks/useDocumentLockerEntitlement";
+import type { BillingSubscriptionResponse, TeamMeResponse } from "../services/apiTypes";
+import ErrorBanner from "../components/ErrorBanner";
 import { useAuth } from "../hooks/useAuth";
+import { PLAN_SUMMARIES, planFromBillingPlan } from "../lib/planSummaries";
+import {
+  summarizeProjectInventory,
+  summarizeTeamOperations,
+  buildHeroMetrics,
+  buildRecommendedActions,
+  type DirectListingHealth,
+  type LeadPipelineSummary
+} from "../lib/dashboard/builderDashboardSelectors";
+import AdminWorkspaceHero from "../components/admin/AdminWorkspaceHero";
+import KPIGrid from "../components/dashboard/KPIGrid";
+import DirectListingsPanel from "../components/dashboard/DirectListingsPanel";
+import ProjectInventoryPanel from "../components/dashboard/ProjectInventoryPanel";
+import LeadPipelinePanel from "../components/dashboard/LeadPipelinePanel";
+import TeamCapacityPanel from "../components/dashboard/TeamCapacityPanel";
+import PlanUsagePanel from "../components/dashboard/PlanUsagePanel";
+import SmartInsightsPanel from "../components/dashboard/SmartInsightsPanel";
 
-const PRICE_FORMAT = new Intl.NumberFormat("en-IN", {
-  style: "currency",
-  currency: "INR",
-  maximumFractionDigits: 0
-});
+type ListingRecord = Record<string, unknown>;
+type AnalyticsSummary = Record<string, unknown> | null;
+type BuilderCapSummary = Record<string, unknown> | null;
+type TeamMeta = TeamMeResponse | null;
 
-type ListingRow = any;
-
-type NormalizedListing = {
-  id: string;
-  title: string;
-  category: "residential" | "commercial" | "land";
-  propertyType: string;
-  subType?: string;
-  type: "sale" | "rent";
-  saleType?: string;
-  locationLabel: string;
-  totalPrice?: number;
-  rentPerMonth?: number;
-  visibility: string;
-  status: "draft" | "pending" | "approved" | "rejected";
-  updatedAt?: any;
-  createdAt?: any;
-  heroPath?: string;
-  contactPhone?: string;
-  hasGallery?: boolean;
-  hasHero?: boolean;
+type DashboardLoadState = {
+  listings: ListingRecord[];
+  analytics: AnalyticsSummary;
+  billingData: BillingSubscriptionResponse | null;
+  builderCapSummary: BuilderCapSummary;
+  teamMeta: TeamMeta;
 };
 
-function toMillis(value: any) {
-  if (!value) return 0;
-  if (typeof value === "number") return value;
-  if (typeof value === "string") {
-    const parsed = Date.parse(value);
-    return Number.isNaN(parsed) ? 0 : parsed;
-  }
-  if (typeof value === "object") {
-    const seconds = value.seconds ?? value._seconds;
-    if (typeof seconds === "number") return seconds * 1000;
-  }
-  return 0;
+const INITIAL_STATE: DashboardLoadState = {
+  listings: [],
+  analytics: null,
+  billingData: null,
+  builderCapSummary: null,
+  teamMeta: null
+};
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  return "Failed to load dashboard";
 }
 
-function formatRelative(value: any) {
-  const millis = toMillis(value);
-  if (!millis) return "-";
-  const diff = Date.now() - millis;
-  const minutes = Math.max(1, Math.round(diff / 60000));
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  return `${days}d ago`;
+function normalizePayload<T>(response: unknown): T | null {
+  if (!response || typeof response !== "object") return null;
+  const maybeWrapped = response as { data?: T };
+  return (maybeWrapped.data as T) ?? (response as T);
 }
 
-function inferCategory(propertyType?: string, category?: string) {
-  if (category) return category as "residential" | "commercial" | "land";
-  if (propertyType === "plot" || propertyType === "land") return "land";
-  if (["shop", "office", "warehouse", "industrial_shed"].includes(propertyType || "")) return "commercial";
-  return "residential";
+function normalizeListings(response: unknown): ListingRecord[] {
+  if (!response || typeof response !== "object") return [];
+  const maybeItems = (response as { items?: unknown }).items;
+  return Array.isArray(maybeItems) ? (maybeItems as ListingRecord[]) : [];
 }
 
-function formatTypeLabel(propertyType: string, subType?: string) {
-  if (propertyType === "flat" && subType === "studio") return "Studio Apartment";
-  if (propertyType === "warehouse" && subType === "industrial_shed") return "Industrial Shed";
-  switch (propertyType) {
-    case "flat":
-      return "Flat / Apartment";
-    case "house":
-      return "Independent House";
-    case "villa":
-      return "Villa / Bungalow";
-    case "row_house":
-      return "Row House";
-    case "plot":
-      return "Plot (Approved)";
-    case "land":
-      return "Land (Raw Land)";
-    case "shop":
-      return "Shop / Showroom";
-    case "office":
-      return "Office Space";
-    case "warehouse":
-      return "Godown / Warehouse";
-    default:
-      return propertyType || "Property";
-  }
+function derivePlanMeta(
+  billingData: BillingSubscriptionResponse | null,
+  tenantId: string | null | undefined
+) {
+  const subscription = billingData?.subscription ?? null;
+  const planKey = planFromBillingPlan(subscription?.planId);
+  const planSummary = planKey ? PLAN_SUMMARIES[planKey] : null;
+
+  return {
+    subscription,
+    planLabel: planSummary?.label ?? subscription?.planId ?? "Builder Enterprise Monthly",
+    planStatus: subscription?.status ?? "active",
+    listingLimit: subscription?.limits?.listingLimit ?? null,
+    listingUsage: subscription?.usage?.listingsCreated ?? 0,
+    featuredLimit: subscription?.limits?.featuredLimit ?? null,
+    featuredUsage: subscription?.usage?.featuredListings ?? 0,
+    tenantName: billingData?.tenant?.tenantId ?? tenantId ?? "Unknown tenant"
+  };
 }
 
-function formatSaleTypeLabel(value?: string) {
-  if (!value) return "";
-  return value === "resale" ? "Resale" : "New";
+function summarizeDashboardListings(listings: ListingRecord[]): DirectListingHealth {
+  const health: DirectListingHealth = {
+    total: listings.length,
+    published: 0,
+    draft: 0,
+    pendingReview: 0,
+    approved: 0,
+    rejected: 0,
+    readyToSubmit: 0,
+    needsAttention: 0,
+    missingBreakdown: {
+      hero: 0,
+      gallery: 0,
+      contact: 0,
+      location: 0
+    }
+  };
+
+  listings.forEach((item) => {
+    const record = (item?.listing as Record<string, unknown> | undefined) ?? item;
+    const publishState = (record?.publishState as string | undefined) ?? (record?.status as string | undefined) ?? "draft";
+    const moderationStatus = (record?.moderation as { verificationStatus?: string } | undefined)?.verificationStatus ?? null;
+    const recordStatus = (record?.recordStatus as string | undefined) ?? "active";
+    const mediaItems = Array.isArray(record?.mediaItems) ? record.mediaItems : [];
+    const coverMediaId = typeof record?.coverMediaId === "string" ? record.coverMediaId : null;
+    const hasHero = Boolean(coverMediaId && mediaItems.some((entry: any) => entry?.id === coverMediaId));
+    const hasGallery = mediaItems.length > 0;
+    const contact = (record?.contact as Record<string, unknown> | undefined) ?? {};
+    const hasContact = Boolean(contact.phone || contact.email);
+    const location = (record?.location as Record<string, unknown> | undefined) ?? {};
+    const hasLocation = Boolean(location.citySlug || location.city || location.locality || location.neighborhood);
+    const missingAny = !hasHero || !hasGallery || !hasContact || !hasLocation;
+
+    if (publishState === "draft" || publishState === "unpublished") {
+      health.draft += 1;
+    }
+    if (moderationStatus === "pending" || moderationStatus === "submitted") {
+      health.pendingReview += 1;
+    }
+    if (moderationStatus === "approved") {
+      health.approved += 1;
+    }
+    if (moderationStatus === "rejected") {
+      health.rejected += 1;
+    }
+    if (publishState === "published" && recordStatus === "active") {
+      health.published += 1;
+    }
+    if ((publishState === "draft" || publishState === "unpublished") && hasHero && hasGallery && hasContact && hasLocation) {
+      health.readyToSubmit += 1;
+    }
+
+    if (!hasHero) health.missingBreakdown.hero += 1;
+    if (!hasGallery) health.missingBreakdown.gallery += 1;
+    if (!hasContact) health.missingBreakdown.contact += 1;
+    if (!hasLocation) health.missingBreakdown.location += 1;
+    if (missingAny) health.needsAttention += 1;
+  });
+
+  return health;
+}
+
+function summarizeDashboardLeadPipeline(analytics: AnalyticsSummary): LeadPipelineSummary {
+  const leads = analytics?.leads as
+    | {
+        total?: number;
+        conversionPct?: number;
+        byStage?: Record<string, number>;
+        unassigned?: number;
+      }
+    | undefined;
+
+  return {
+    total: leads?.total ?? 0,
+    conversionPct: leads?.conversionPct ?? 0,
+    stages: leads?.byStage ?? {},
+    unassigned: leads?.unassigned ?? 0
+  };
 }
 
 export default function DashboardPage() {
   const { refreshToken, tenantId } = useAuth();
-  const [items, setItems] = useState<ListingRow[]>([]);
-  const [thumbs, setThumbs] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(false);
+  const { entitlement } = useDocumentLockerEntitlement();
+
+  const [dashboardState, setDashboardState] = useState<DashboardLoadState>(INITIAL_STATE);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
-  const [showFilters, setShowFilters] = useState(true);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [visibilityFilter, setVisibilityFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [sortBy, setSortBy] = useState("updated_desc");
 
   useEffect(() => {
-    async function load() {
+    let isMounted = true;
+
+    async function loadDashboard() {
+      if (!tenantId) {
+        if (isMounted) {
+          setError("Tenant not available");
+          setDashboardState(INITIAL_STATE);
+          setLoading(false);
+        }
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
       try {
-        if (!tenantId) throw new Error("Missing tenant");
-        setLoading(true);
-        setError(null);
         await refreshToken();
-        const data = await listListings(tenantId);
-        setItems(data.items || []);
-        setLastRefreshedAt(Date.now());
-      } catch (err: any) {
-        setError(err.message || "Failed to load properties");
+
+        const listingsPromise = listListings(tenantId);
+        const analyticsPromise = getAnalyticsSummary(tenantId, "30d").catch(() => null);
+        const billingPromise = getBillingSubscription().catch(() => null);
+        const builderCapPromise = getBuilderCapSummary().catch(() => null);
+        const teamPromise = getTeamMe().catch(() => null);
+
+        const [listingsRes, analyticsRes, billingRes, builderCapRes, teamRes] = await Promise.all([
+          listingsPromise,
+          analyticsPromise,
+          billingPromise,
+          builderCapPromise,
+          teamPromise
+        ]);
+
+        if (!isMounted) return;
+
+        setDashboardState({
+          listings: normalizeListings(listingsRes),
+          analytics: normalizePayload<Record<string, unknown>>(analyticsRes),
+          billingData: (billingRes as BillingSubscriptionResponse | null) ?? null,
+          builderCapSummary: normalizePayload<Record<string, unknown>>(builderCapRes),
+          teamMeta: normalizePayload<TeamMeResponse>(teamRes)
+        });
+      } catch (loadError: unknown) {
+        if (!isMounted) return;
+        setError(getErrorMessage(loadError));
+        setDashboardState(INITIAL_STATE);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
-    load();
+
+    void loadDashboard();
+
+    return () => {
+      isMounted = false;
+    };
   }, [refreshToken, tenantId]);
 
-  const normalized = useMemo<NormalizedListing[]>(() => {
-    return (items || []).map((item) => {
-      const listing = item.listing || item;
-      const id = item.id || item.listingId || item.propertyId || listing.id || "";
-      const location = listing.location || {};
-      const locationLabel = [location.citySlug || location.city || listing.citySlug, location.locality || listing.locality]
-        .filter(Boolean)
-        .join(", ");
-      const visibility = listing.visibility || item.visibility || "draft";
-      const verification =
-        item.moderation?.verificationStatus ||
-        listing.moderation?.verificationStatus ||
-        listing.verificationStatus ||
-        listing.listingStatus ||
-        "draft";
-      const status: NormalizedListing["status"] =
-        verification === "approved"
-          ? "approved"
-          : verification === "rejected"
-            ? "rejected"
-            : verification === "pending" || verification === "submitted"
-              ? "pending"
-              : "draft";
-      const media = listing.media || {};
-      const heroPath = media.hero?.objectPath;
-      const gallery = media.gallery || [];
-      return {
-        id,
-        title: listing.title || "Untitled listing",
-        category: inferCategory(listing.propertyType, listing.category),
-        propertyType: listing.propertyType || "flat",
-        subType: listing.subType || listing.metadata?.subType,
-        type: listing.type === "rent" ? "rent" : "sale",
-        saleType: listing.saleType,
-        locationLabel: locationLabel || "Location pending",
-        totalPrice: listing.pricing?.totalPrice ?? listing.totalPrice,
-        rentPerMonth: listing.pricing?.rentPerMonth ?? listing.rentPerMonth,
-        visibility,
-        status,
-        updatedAt: listing.updatedAt || item.updatedAt,
-        createdAt: listing.createdAt || item.createdAt,
-        heroPath,
-        contactPhone: listing.contact?.phone || listing.contactPhone,
-        hasHero: Boolean(media.hero?.objectPath),
-        hasGallery: Array.isArray(gallery) && gallery.length > 0
-      };
-    });
-  }, [items]);
+  const { listings, analytics, billingData, builderCapSummary, teamMeta } = dashboardState;
 
-  useEffect(() => {
-    async function hydrateThumbs() {
-      const paths = normalized.map((item) => item.heroPath).filter(Boolean) as string[];
-      if (!paths.length) return;
-      try {
-        const signed = await signGetMedia(Array.from(new Set(paths)));
-        const map: Record<string, string> = {};
-        Object.keys(signed || {}).forEach((key) => {
-          map[key] = signed[key];
-        });
-        setThumbs(map);
-      } catch {
-        // ignore
-      }
-    }
-    hydrateThumbs();
-  }, [normalized]);
+  const listingHealth = useMemo(() => summarizeDashboardListings(listings), [listings]);
 
-  const kpis = useMemo(() => {
-    const total = normalized.length;
-    const draft = normalized.filter((item) => item.status === "draft").length;
-    const pending = normalized.filter((item) => item.status === "pending").length;
-    const approved = normalized.filter((item) => item.status === "approved").length;
-    const rejected = normalized.filter((item) => item.status === "rejected").length;
-    const published = normalized.filter((item) => item.visibility === "published").length;
-    return { total, draft, pending, approved, rejected, published };
-  }, [normalized]);
+  const projectHealth = useMemo(
+    () => summarizeProjectInventory(builderCapSummary),
+    [builderCapSummary]
+  );
 
-  const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    let data = normalized;
-    if (statusFilter !== "all") data = data.filter((item) => item.status === statusFilter);
-    if (visibilityFilter !== "all") data = data.filter((item) => item.visibility === visibilityFilter);
-    if (categoryFilter !== "all") data = data.filter((item) => item.category === categoryFilter);
-    if (query) {
-      data = data.filter((item) => {
-        return (
-          item.title.toLowerCase().includes(query) ||
-          item.locationLabel.toLowerCase().includes(query) ||
-          item.id.toLowerCase().includes(query)
-        );
-      });
-    }
-    data = [...data].sort((a, b) => {
-      if (sortBy === "created_desc") return toMillis(b.createdAt) - toMillis(a.createdAt);
-      return toMillis(b.updatedAt) - toMillis(a.updatedAt);
-    });
-    return data;
-  }, [normalized, search, statusFilter, visibilityFilter, categoryFilter, sortBy]);
+  const leadPipeline = useMemo(() => summarizeDashboardLeadPipeline(analytics), [analytics]);
 
-  const hasActiveFilters =
-    search.trim().length > 0 ||
-    statusFilter !== "all" ||
-    visibilityFilter !== "all" ||
-    categoryFilter !== "all" ||
-    sortBy !== "updated_desc";
+  const teamOperations = useMemo(() => summarizeTeamOperations(teamMeta), [teamMeta]);
 
-  const applyKpi = (key: string) => {
-    if (key === "total") {
-      setStatusFilter("all");
-      setVisibilityFilter("all");
-      return;
-    }
-    if (key === "published") {
-      setVisibilityFilter("published");
-      setStatusFilter("all");
-      return;
-    }
-    setStatusFilter(key);
-  };
+  const heroMetrics = useMemo(
+    () =>
+      buildHeroMetrics({
+        listingHealth,
+        projectInventory: projectHealth,
+        leadPipeline,
+        teamOperations
+      }),
+    [listingHealth, projectHealth, leadPipeline, teamOperations]
+  );
+
+  const recommendedActions = useMemo(
+    () =>
+      buildRecommendedActions({
+        listingHealth,
+        projectInventory: projectHealth,
+        leadPipeline,
+        teamOperations
+      }),
+    [listingHealth, projectHealth, leadPipeline, teamOperations]
+  );
+
+  const {
+    planLabel,
+    planStatus,
+    listingLimit,
+    listingUsage,
+    featuredLimit,
+    featuredUsage,
+    tenantName
+  } = useMemo(() => derivePlanMeta(billingData, tenantId), [billingData, tenantId]);
+
+  const headerActions = useMemo(
+    () => [
+      { label: "New Listing", to: "/listings/new", variant: "primary" as const },
+      { label: "New Project", to: "/projects/new" },
+      { label: "View Leads", to: "/leads" },
+      { label: "Manage Team", to: "/team" }
+    ],
+    []
+  );
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-[16px] border border-theme bg-surface/60 p-4 shadow-sm text-sm text-secondary">
+          Loading dashboard…
+        </div>
+      </div>
+    );
+  }
+
+  if (!tenantId) {
+    return (
+      <div className="space-y-4">
+        <ErrorBanner message="Tenant not available" />
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-app min-h-screen">
-      <div className="mx-auto max-w-6xl px-4 py-6 space-y-6">
-        <div className="card-glass-strong border border-theme p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-2">
-              <div>
-                <h1 className="text-2xl font-semibold text-primary">Dashboard</h1>
-                <p className="text-sm text-secondary">Track listings, approvals, and publishing at a glance.</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="rounded-full bg-surface px-2.5 py-1 font-semibold text-secondary">
-                  {tenantId ? `Tenant: ${tenantId}` : "Tenant"}
-                </span>
-              </div>
-            </div>
-            <div className="flex flex-col items-end gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Link
-                  to="/listings/new"
-                  className="rounded-lg btn-primary px-4 py-2 text-sm font-semibold"
-                >
-                  + New Listing
-                </Link>
-                <Link
-                  to="/add?mode=project"
-                  className="rounded-lg btn-secondary px-4 py-2 text-sm font-semibold opacity-60 cursor-not-allowed"
-                  title="Enterprise only"
-                  aria-disabled
-                  onClick={(e) => e.preventDefault()}
-                >
-                  New Project
-                </Link>
-              </div>
-              <div className="text-xs text-muted">
-                Last refreshed: {lastRefreshedAt ? formatRelative(lastRefreshedAt) : "just now"}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card-glass border border-theme p-4 space-y-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search title, locality, or ID"
-              className="flex-1 min-w-[220px] rounded-lg input-glass px-3 py-2 text-sm"
-            />
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="rounded-lg input-glass px-3 py-2 text-sm"
-            >
-              <option value="updated_desc">Updated (newest)</option>
-              <option value="created_desc">Created (newest)</option>
-            </select>
-            <button
-              type="button"
-              onClick={() => setShowFilters((prev) => !prev)}
-              className="rounded-lg btn-secondary px-3 py-2 text-sm font-semibold"
-            >
-              Filters
-            </button>
-            {hasActiveFilters && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearch("");
-                  setStatusFilter("all");
-                  setVisibilityFilter("all");
-                  setCategoryFilter("all");
-                  setSortBy("updated_desc");
-                }}
-                className="rounded-lg btn-secondary px-3 py-2 text-sm font-semibold"
+    <div className="space-y-4">      <AdminWorkspaceHero
+        eyebrow="Enterprise Command Center"
+        title="Dashboard"
+        description="Monitor listings, projects, leads, team readiness, and plan usage from one premium workspace."
+        stats={[
+          { label: "Tenant", value: tenantName || "Tenant" },
+          { label: "Active Plan", value: planLabel || "Builder Enterprise Monthly", tone: "warning" },
+          { label: "Live Listings", value: listingHealth.published, tone: listingHealth.published > 0 ? "success" : "default" }
+        ]}
+        actions={
+          <>
+            {headerActions.map((action) => (
+              <Link
+                key={action.label}
+                to={action.to}
+                className={action.variant === "primary" ? "rounded-xl btn-primary px-4 py-3 text-sm font-semibold" : "rounded-xl btn-secondary px-4 py-3 text-sm font-semibold"}
               >
-                Clear filters
-              </button>
-            )}
-          </div>
-          {showFilters && (
-            <div className="grid gap-3 md:grid-cols-4">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="rounded-lg input-glass px-3 py-2 text-sm"
-              >
-                <option value="all">All status</option>
-                <option value="draft">Draft</option>
-                <option value="pending">Pending review</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-              </select>
-              <select
-                value={visibilityFilter}
-                onChange={(e) => setVisibilityFilter(e.target.value)}
-                className="rounded-lg input-glass px-3 py-2 text-sm"
-              >
-                <option value="all">All visibility</option>
-                <option value="published">Published</option>
-                <option value="draft">Draft</option>
-              </select>
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="rounded-lg input-glass px-3 py-2 text-sm"
-              >
-                <option value="all">All categories</option>
-                <option value="residential">Residential</option>
-                <option value="commercial">Commercial</option>
-                <option value="land">Land</option>
-              </select>
-            </div>
-          )}
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-          {[
-            { key: "total", label: "Total", value: kpis.total },
-            { key: "draft", label: "Draft", value: kpis.draft },
-            { key: "pending", label: "Pending Review", value: kpis.pending },
-            { key: "approved", label: "Approved", value: kpis.approved },
-            { key: "rejected", label: "Rejected", value: kpis.rejected },
-            { key: "published", label: "Published", value: kpis.published }
-          ].map((card) => (
-            <button
-              key={card.key}
-              onClick={() => applyKpi(card.key)}
-              className="card-glass border border-theme p-4 text-left hover:border-strong"
-              type="button"
-            >
-              <div className="text-xs font-semibold uppercase tracking-wide text-muted">{card.label}</div>
-              <div className="mt-2 text-2xl font-semibold text-primary">{card.value}</div>
-            </button>
-          ))}
-        </div>
-
-        {error && <div className="text-sm text-rose-300">{error}</div>}
-
-        {loading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <div key={index} className="h-60 card-glass border border-theme p-4">
-                <div className="h-28 rounded-xl bg-surface/10 animate-pulse" />
-                <div className="mt-4 h-4 w-3/4 rounded bg-surface/10 animate-pulse" />
-                <div className="mt-2 h-3 w-1/2 rounded bg-surface/10 animate-pulse" />
-              </div>
+                {action.label}
+              </Link>
             ))}
+          </>
+        }
+        aside={
+          <div className="space-y-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">Plan status</div>
+            <div className="text-sm leading-6 text-slate-200">{planStatus ? `Current billing status: ${planStatus}.` : "Billing status is active."}</div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-slate-200">{listingLimit != null ? `${listingUsage} of ${listingLimit} listing slots are in use.` : `${listingUsage} listings are currently active in your workspace.`}</div>
           </div>
-        ) : items.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-theme bg-surface p-8 text-center">
-            <div className="text-lg font-semibold text-primary">No listings yet</div>
-            <div className="mt-2 text-sm text-secondary">Create your first listing to get started.</div>
-            <Link
-              to="/listings/new"
-              className="mt-4 inline-flex rounded-lg btn-primary px-4 py-2 text-sm font-semibold"
-            >
-              + New Listing
-            </Link>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-theme bg-surface p-8 text-center">
-            <div className="text-lg font-semibold text-primary">No results found</div>
-            <div className="mt-2 text-sm text-secondary">Try clearing filters or adjusting search.</div>
-            <button
-              type="button"
-              onClick={() => {
-                setSearch("");
-                setStatusFilter("all");
-                setVisibilityFilter("all");
-                setCategoryFilter("all");
-              }}
-              className="mt-4 inline-flex rounded-lg btn-secondary px-4 py-2 text-sm font-semibold"
-            >
-              Clear filters
-            </button>
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((item) => {
-              const healthMissing = [
-                !item.title?.trim() ? "title" : null,
-                item.locationLabel === "Location pending" ? "location" : null,
-                !item.contactPhone ? "contact" : null,
-                !item.hasHero ? "hero" : null,
-                !item.hasGallery ? "gallery" : null
-              ].filter(Boolean).length;
-              const healthLabel = healthMissing > 0 ? `Missing ${healthMissing}` : "Ready";
-              const healthTone = healthMissing > 0 ? "bg-amber-400/20 text-amber-200" : "bg-emerald-400/20 text-emerald-200";
-              const statusTone =
-                item.status === "approved"
-                  ? "bg-emerald-400/20 text-emerald-200"
-                  : item.status === "rejected"
-                    ? "bg-rose-400/20 text-rose-200"
-                    : item.status === "pending"
-                      ? "bg-amber-400/20 text-amber-200"
-                      : "bg-surface/10 text-secondary";
-              const visibilityTone =
-                item.visibility === "published"
-                  ? "bg-indigo-400/20 text-indigo-200"
-                  : "bg-surface/10 text-secondary";
-              const thumbUrl = item.heroPath ? thumbs[item.heroPath] : null;
-              const priceLabel =
-                item.type === "rent"
-                  ? item.rentPerMonth
-                    ? `${PRICE_FORMAT.format(item.rentPerMonth)} / mo`
-                    : "Price on request"
-                  : item.totalPrice
-                    ? PRICE_FORMAT.format(item.totalPrice)
-                    : "Price on request";
+        }
+      />
 
-              return (
-                <div key={item.id} className="rounded-2xl card-glass border border-theme bg-surface shadow-sm overflow-hidden">
-                  <div className="relative h-36 bg-surface/10">
-                    {thumbUrl ? (
-                      <img src={thumbUrl} alt={item.title} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-sm text-muted">
-                        No image
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4 space-y-2">
-                    <div className="text-base font-semibold text-primary line-clamp-1">{item.title}</div>
-                    <div className="text-xs text-muted">
-                      {formatTypeLabel(item.propertyType, item.subType)} -
-                      {item.type === "rent" ? " Rent / Lease" : ` ${formatSaleTypeLabel(item.saleType || "new")}`}
-                    </div>
-                    <div className="text-xs text-muted line-clamp-1">{item.locationLabel}</div>
-                    <div className="text-sm font-semibold text-primary">{priceLabel}</div>
+      {error ? <ErrorBanner message={error} /> : null}
 
-                    <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
-                      <span className={`rounded-full px-2.5 py-1 ${statusTone}`}>{item.status}</span>
-                      <span className={`rounded-full px-2.5 py-1 ${visibilityTone}`}>{item.visibility}</span>
-                      <span className={`rounded-full px-2.5 py-1 ${healthTone}`}>{healthLabel}</span>
-                    </div>
+      <KPIGrid metrics={heroMetrics} />
 
-                    <div className="flex items-center justify-between text-xs text-muted pt-2">
-                      <span>Updated {formatRelative(item.updatedAt || item.createdAt)}</span>
-                      {item.visibility === "published" && (
-                        <span className="text-indigo-200">Public link</span>
-                      )}
-                    </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <DirectListingsPanel listingHealth={listingHealth} />
+        <ProjectInventoryPanel projectHealth={projectHealth} />
+      </div>
 
-                    <div className="flex flex-wrap gap-2 pt-2">
-                      <Link
-                        to={`/listings/${item.id}/edit`}
-                        className="rounded-md btn-secondary px-3 py-1.5 text-xs font-semibold"
-                      >
-                        Edit
-                      </Link>
-                      <Link
-                        to={`/submit/${item.id}`}
-                        className="rounded-md btn-secondary px-3 py-1.5 text-xs font-semibold"
-                      >
-                        Submit
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <LeadPipelinePanel leadPipeline={leadPipeline} />
+        </div>
+        <TeamCapacityPanel teamOperations={teamOperations} leadPipeline={leadPipeline} />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <PlanUsagePanel
+            listingUsage={listingUsage}
+            listingLimit={listingLimit}
+            featuredUsage={featuredUsage}
+            featuredLimit={featuredLimit}
+            projectHealth={projectHealth}
+            documentLocker={entitlement}
+          />
+        </div>
+        <SmartInsightsPanel actions={recommendedActions} />
       </div>
     </div>
   );
 }
+
 
 
 

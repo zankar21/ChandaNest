@@ -1,5 +1,7 @@
 import type {
   Agency,
+  AnalyticsSummary,
+  Approval,
   Enterprise,
   EnterpriseProject,
   InventoryItem,
@@ -8,8 +10,15 @@ import type {
   Mandate,
   Membership,
   BusinessRequest,
+  PlatformActivityItem,
+  PlatformAnalyticsSummary,
+  PlatformBuyerRequest,
+  PlatformTenantDetail,
+  PlatformTenantCreateResponse,
+  PlatformTenantPayment,
   BillingSubscriptionResponse,
   CreateInviteResponse,
+  RegenerateTenantAdminInviteResponse,
   OrgDoc,
   OrgListing,
   OrgVerification,
@@ -19,7 +28,8 @@ import type {
   Subscription,
   TeamInvite,
   TeamMeResponse,
-  TeamUser
+  TeamUser,
+  DocumentLockerRecord
 } from "./apiTypes";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8080";
@@ -35,6 +45,18 @@ type ApiError = Error & {
 
 let currentIdToken: string | null = null;
 let currentAppCheckToken: string | null = null;
+let currentTenantId: string | null = null;
+const FORBIDDEN_LEGACY_LISTING_KEYS = [
+  "type",
+  "purpose",
+  "pricing",
+  "rental",
+  "visibility",
+  "listingStatus",
+  "status",
+  "moderation",
+  "price"
+] as const;
 
 export function setAuthToken(token: string | null) {
   currentIdToken = token;
@@ -42,6 +64,10 @@ export function setAuthToken(token: string | null) {
 
 export function setAppCheckToken(token: string | null) {
   currentAppCheckToken = token;
+}
+
+export function setTenantId(tenantId: string | null) {
+  currentTenantId = tenantId;
 }
 
 function normalizeIssuePath(path: unknown) {
@@ -61,12 +87,23 @@ function parseIssues(payload: any): ApiIssue[] {
     .filter((issue: ApiIssue) => issue.message);
 }
 
+function assertNoLegacyListingKeys(payload: Record<string, any>) {
+  const offendingKeys = FORBIDDEN_LEGACY_LISTING_KEYS.filter((key) => key in (payload || {}));
+  if (offendingKeys.length === 0) return;
+  const message = `Legacy listing keys are forbidden in V3 payloads: ${offendingKeys.join(", ")}`;
+  if (import.meta.env.DEV) {
+    throw new Error(message);
+  }
+  console.error(message);
+}
+
 async function request<T>(path: string, options: RequestInit = {}, opts?: { requireAppCheck?: boolean }) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string> | undefined)
   };
   if (currentIdToken) headers.Authorization = `Bearer ${currentIdToken}`;
+  if (currentTenantId) headers["x-tenant-id"] = currentTenantId;
   if (opts?.requireAppCheck && currentAppCheckToken) headers["X-Firebase-AppCheck"] = currentAppCheckToken;
 
   const res = await fetch(`${API_BASE}${path}`, {
@@ -92,6 +129,7 @@ async function requestRaw<T>(path: string, options: RequestInit = {}, opts?: { r
     ...(options.headers as Record<string, string> | undefined)
   };
   if (currentIdToken) headers.Authorization = `Bearer ${currentIdToken}`;
+  if (currentTenantId) headers["x-tenant-id"] = currentTenantId;
   if (opts?.requireAppCheck && currentAppCheckToken) headers["X-Firebase-AppCheck"] = currentAppCheckToken;
 
   const res = await fetch(`${API_BASE}${path}`, {
@@ -116,8 +154,210 @@ export const apiClient = {
   post: <T>(path: string, body?: unknown, opts?: { requireAppCheck?: boolean }) =>
     request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }, opts),
   patch: <T>(path: string, body?: unknown, opts?: { requireAppCheck?: boolean }) =>
-    request<T>(path, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }, opts)
+    request<T>(path, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }, opts),
+  delete: <T>(path: string, opts?: { requireAppCheck?: boolean }) => request<T>(path, { method: "DELETE" }, opts)
 };
+
+export async function getMonetizationCatalogAdmin(params?: {
+  role?: "owner" | "agent" | "builder" | "enterprise";
+  includeInactive?: boolean;
+}) {
+  return requestRaw<{ ok: true; data: { items: any[] } }>(
+    `/v1/admin/monetization/catalog${buildQuery(params)}`,
+    { method: "GET" }
+  );
+}
+
+export async function getAdminBuilderCapSummary(tenantId: string) {
+  return requestRaw<{ ok: true; data: any }>(
+    `/v1/admin/monetization/builder/cap-summary${buildQuery({ tenantId })}`,
+    { method: "GET" }
+  );
+}
+
+export async function getBuilderCapSummary() {
+  return requestRaw<{ ok: true; data: any }>(`/v1/monetization/builder/cap-summary`, {
+    method: "GET"
+  });
+}
+
+export async function getAdminBuilderStats() {
+  return requestRaw<{ ok: true; data: any }>(`/v1/admin/monetization/builder-stats`, {
+    method: "GET"
+  });
+}
+
+export async function getAdminAgentStats() {
+  return requestRaw<{ ok: true; data: any }>(`/v1/admin/monetization/agent-stats`, {
+    method: "GET"
+  });
+}
+
+export async function getMonetizationHealthSummary() {
+  return requestRaw<{ ok: true; data: any }>(`/v1/admin/monetization/health-summary`, {
+    method: "GET"
+  });
+}
+
+export async function getMonetizationWebhookAudit(params?: {
+  limit?: number;
+  status?: "received" | "processed" | "duplicate" | "failed";
+  eventType?: string;
+}) {
+  return requestRaw<{ ok: true; data: { items: any[]; summary: any } }>(
+    `/v1/admin/monetization/webhook-audit${buildQuery(params)}`,
+    { method: "GET" }
+  );
+}
+
+export async function getMonetizationErrorCodes() {
+  return requestRaw<{ ok: true; data: { items: any[] } }>(`/v1/admin/monetization/error-codes`, {
+    method: "GET"
+  });
+}
+
+export async function getAdminListingMonetizationOps(listingId: string, tenantId?: string) {
+  return requestRaw<{ ok: true; data: any }>(
+    `/v1/admin/monetization/listings/${encodeURIComponent(listingId)}${buildQuery({ tenantId })}`,
+    { method: "GET" }
+  );
+}
+
+export async function getAdminAgentMonetizationOps(uid: string, tenantId: string) {
+  return requestRaw<{ ok: true; data: any }>(
+    `/v1/admin/monetization/agents/${encodeURIComponent(uid)}${buildQuery({ tenantId })}`,
+    { method: "GET" }
+  );
+}
+
+export async function getAdminOwnerMonetizationOps(uid: string, params?: { tenantId?: string; listingId?: string }) {
+  return requestRaw<{ ok: true; data: any }>(
+    `/v1/admin/monetization/owners/${encodeURIComponent(uid)}${buildQuery(params)}`,
+    { method: "GET" }
+  );
+}
+
+export async function getAdminBuilderMonetizationOps(tenantId: string, projectId?: string) {
+  return requestRaw<{ ok: true; data: any }>(
+    `/v1/admin/monetization/builders/${encodeURIComponent(tenantId)}${buildQuery({ projectId })}`,
+    { method: "GET" }
+  );
+}
+
+export async function explainMonetizedListing(listingId: string, tenantId?: string) {
+  return requestRaw<{ ok: true; data: any }>(
+    `/v1/admin/monetization/explain/listings/${encodeURIComponent(listingId)}${buildQuery({ tenantId })}`,
+    { method: "GET" }
+  );
+}
+
+export async function explainMonetizedBuilderProject(tenantId: string, projectId: string) {
+  return requestRaw<{ ok: true; data: any }>(
+    `/v1/admin/monetization/explain/builders/${encodeURIComponent(tenantId)}/projects/${encodeURIComponent(projectId)}`,
+    { method: "GET" }
+  );
+}
+
+export async function resyncMonetizedListing(listingId: string, params?: { tenantId?: string; dryRun?: boolean }) {
+  return requestRaw<{ ok: true; data: any }>(
+    `/v1/admin/monetization/resync/listings/${encodeURIComponent(listingId)}${buildQuery(params)}`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+}
+
+export async function resyncAgentCredits(uid: string, tenantId: string, dryRun?: boolean) {
+  return requestRaw<{ ok: true; data: any }>(
+    `/v1/admin/monetization/resync/agents/${encodeURIComponent(uid)}/credits${buildQuery({ tenantId, dryRun })}`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+}
+
+export async function resyncAgentAutoRenew(uid: string, tenantId: string, params?: { listingId?: string; dryRun?: boolean }) {
+  return requestRaw<{ ok: true; data: any }>(
+    `/v1/admin/monetization/resync/agents/${encodeURIComponent(uid)}/autorenew${buildQuery({
+      tenantId,
+      listingId: params?.listingId,
+      dryRun: params?.dryRun
+    })}`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+}
+
+export async function resyncBuilderUsage(tenantId: string, dryRun?: boolean) {
+  return requestRaw<{ ok: true; data: any }>(
+    `/v1/admin/monetization/resync/builders/${encodeURIComponent(tenantId)}/usage${buildQuery({ dryRun })}`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+}
+
+export async function resyncOwnerListing(listingId: string, tenantId: string, dryRun?: boolean) {
+  return requestRaw<{ ok: true; data: any }>(
+    `/v1/admin/monetization/resync/owners/listings/${encodeURIComponent(listingId)}${buildQuery({ tenantId, dryRun })}`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+}
+
+export async function listProjectReraAllowlist(tenantId?: string) {
+  return requestRaw<{ ok: true; data: { items: any[] } }>(
+    `/v1/admin/monetization/project-rera-allowlist${buildQuery({ tenantId })}`,
+    { method: "GET" }
+  );
+}
+
+export async function getAdminProjectPublishChecklist(tenantId: string, projectId: string) {
+  return requestRaw<{ ok: true; data: { ok: true; issues: any[] } }>(
+    `/v1/admin/projects/${projectId}/publish-checklist${buildQuery({ tenantId })}`,
+    { method: "GET" }
+  );
+}
+
+export async function createBuilderProjectSpotlightOrder(tenantId: string, projectId: string, idempotencyKey?: string) {
+  return requestRaw<{ ok: true; data: any }>(
+    `/v1/monetization/builder/projects/${projectId}/spotlight/order`,
+    {
+      method: "POST",
+      body: JSON.stringify({ idempotencyKey })
+    }
+  );
+}
+
+export async function createBuilderUnitBoostOrder(
+  tenantId: string,
+  projectId: string,
+  unitId: string,
+  idempotencyKey?: string
+) {
+  return requestRaw<{ ok: true; data: any }>(
+    `/v1/monetization/builder/projects/${projectId}/units/${unitId}/boost/order`,
+    {
+      method: "POST",
+      body: JSON.stringify({ idempotencyKey })
+    }
+  );
+}
+
+export async function createBuilderSubscriptionOrder(productId: "builder_subscription_starter_m_v1" | "builder_subscription_growth_m_v1" | "builder_subscription_enterprise_m_v1", idempotencyKey?: string) {
+  return requestRaw<{ ok: true; data: any }>(
+    `/v1/monetization/builder/subscription/order`,
+    {
+      method: "POST",
+      body: JSON.stringify({ productId, idempotencyKey })
+    },
+    { requireAppCheck: true }
+  );
+}
+
+export async function verifyMonetizationPayment(body: {
+  orderId: string;
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+}) {
+  return requestRaw<{ ok: true; data: any }>(`/v1/monetization/payments/verify`, {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
 
 export async function fetchMetaEnums() {
   return apiClient.get<{
@@ -149,7 +389,11 @@ export async function listListings(tenantId: string) {
 
 function buildQuery(params?: Record<string, string | number | boolean | undefined | null>) {
   if (!params) return "";
-  const entries = Object.entries(params).filter(([, value]) => value !== undefined && value !== null);
+  const entries = Object.entries(params).filter(([, value]) => {
+    if (value === undefined || value === null) return false;
+    if (typeof value === "string" && value.trim() === "") return false;
+    return true;
+  });
   if (entries.length === 0) return "";
   const query = new URLSearchParams(entries.map(([key, value]) => [key, String(value)])).toString();
   return query ? `?${query}` : "";
@@ -161,15 +405,17 @@ export const listings = {
 };
 
 export async function createListing(tenantId: string, body: any) {
+  assertNoLegacyListingKeys(body);
   return apiClient.post<{ listingId: string }>(`/v1/tenants/${tenantId}/listings`, body, { requireAppCheck: true });
 }
 
 export async function updateListing(tenantId: string, listingId: string, body: any) {
+  assertNoLegacyListingKeys(body);
   return apiClient.patch(`/v1/tenants/${tenantId}/listings/${listingId}`, body, { requireAppCheck: true });
 }
 
 export async function submitListing(tenantId: string, listingId: string) {
-  return apiClient.post<{ status: string; requiredAction?: string; visibility?: string }>(
+  return apiClient.post<{ status: string; publishState?: string }>(
     `/v1/tenants/${tenantId}/listings/${listingId}/submit`,
     {},
     { requireAppCheck: true }
@@ -177,7 +423,7 @@ export async function submitListing(tenantId: string, listingId: string) {
 }
 
 export async function publishListing(tenantId: string, listingId: string) {
-  return apiClient.post<{ status: string; visibility?: string }>(
+  return apiClient.post<{ status: string; publishState?: string }>(
     `/v1/tenants/${tenantId}/listings/${listingId}/publish`,
     {},
     { requireAppCheck: true }
@@ -185,7 +431,7 @@ export async function publishListing(tenantId: string, listingId: string) {
 }
 
 export async function approveListing(tenantId: string, listingId: string) {
-  return apiClient.post<{ status: string; requiredAction?: string; visibility?: string }>(
+  return apiClient.post<{ status: string; publishState?: string }>(
     `/v1/tenants/${tenantId}/listings/${listingId}/approve`,
     {},
     { requireAppCheck: true }
@@ -200,10 +446,14 @@ export async function rejectListing(tenantId: string, listingId: string, reason:
   );
 }
 
-export async function setListingVisibility(tenantId: string, listingId: string, visibility: "published" | "draft") {
-  return apiClient.post<{ visibility: string; status?: string }>(
+export async function setListingVisibility(
+  tenantId: string,
+  listingId: string,
+  publishState: "published" | "draft" | "unpublished"
+) {
+  return apiClient.post<{ publishState: string }>(
     `/v1/tenants/${tenantId}/listings/${listingId}/visibility`,
-    { visibility },
+    { publishState },
     { requireAppCheck: true }
   );
 }
@@ -230,7 +480,16 @@ export async function updateProjectApi(tenantId: string, projectId: string, body
 
 export async function listAdminProjects(
   tenantId: string,
-  params?: { q?: string; type?: string; status?: string; visibility?: string; limit?: number; cursor?: string }
+  params?: {
+    q?: string;
+    type?: string;
+    status?: string;
+    visibility?: string;
+    publishState?: string;
+    recordStatus?: string;
+    limit?: number;
+    cursor?: string;
+  }
 ) {
   return requestRaw<{ ok: true; data: { items: Project[]; nextCursor?: string } }>(
     `/v1/admin/projects${buildQuery({ tenantId, ...params })}`,
@@ -300,6 +559,18 @@ export async function createAdminProjectUnit(tenantId: string, projectId: string
   );
 }
 
+export async function bulkCreateAdminProjectUnits(
+  tenantId: string,
+  projectId: string,
+  body: { units: Record<string, any>[] }
+) {
+  return requestRaw<{ ok: true; data: { ids: string[] } }>(
+    `/v1/admin/projects/${projectId}/units/bulk${buildQuery({ tenantId })}`,
+    { method: "POST", body: JSON.stringify(body) },
+    { requireAppCheck: true }
+  );
+}
+
 export async function updateAdminProjectUnit(
   tenantId: string,
   projectId: string,
@@ -342,6 +613,98 @@ export async function signGetMedia(paths: string[]) {
   return map;
 }
 
+export async function signDocumentLockerPut(
+  tenantId: string,
+  objectPath: string,
+  contentType: string,
+  contentLength?: number
+) {
+  return apiClient.post<{ url: string; objectPath: string; expiresAt: string }>(
+    `/v1/tenants/${tenantId}/documents/sign-put`,
+    { objectPath, contentType, contentLength },
+    { requireAppCheck: true }
+  );
+}
+
+export async function signDocumentLockerGet(tenantId: string, paths: string[]) {
+  if (!paths || paths.length === 0) return {};
+  const data = await apiClient.post<{ items: { objectPath: string; url: string }[] }>(
+    `/v1/tenants/${tenantId}/documents/sign-get`,
+    { paths }
+  );
+  const map: Record<string, string> = {};
+  (data.items || []).forEach((i) => {
+    map[i.objectPath] = i.url;
+  });
+  return map;
+}
+
+export async function listDocumentLockerRecords(
+  tenantId: string,
+  params?: {
+    entityType?: string;
+    entityId?: string;
+    category?: string;
+    status?: string;
+    visibility?: string;
+    expiringInDays?: number;
+    q?: string;
+    limit?: number;
+  }
+) {
+  return requestRaw<{ ok: true; data: { items: DocumentLockerRecord[] } }>(
+    `/v1/tenants/${tenantId}/documents${buildQuery(params)}`,
+    { method: "GET" }
+  );
+}
+
+export async function getDocumentLockerRecord(tenantId: string, documentId: string) {
+  return requestRaw<{ ok: true; data: DocumentLockerRecord }>(
+    `/v1/tenants/${tenantId}/documents/${encodeURIComponent(documentId)}`,
+    { method: "GET" }
+  );
+}
+
+export async function createDocumentLockerRecord(tenantId: string, payload: Record<string, any>) {
+  return requestRaw<{ ok: true; data: { id: string } }>(
+    `/v1/tenants/${tenantId}/documents`,
+    { method: "POST", body: JSON.stringify(payload) },
+    { requireAppCheck: true }
+  );
+}
+
+export async function patchDocumentLockerRecord(
+  tenantId: string,
+  documentId: string,
+  payload: Record<string, any>
+) {
+  return requestRaw<{ ok: true; data: { id: string } }>(
+    `/v1/tenants/${tenantId}/documents/${encodeURIComponent(documentId)}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+    { requireAppCheck: true }
+  );
+}
+
+export async function replaceDocumentLockerRecord(
+  tenantId: string,
+  documentId: string,
+  payload: Record<string, any>
+) {
+  return requestRaw<{ ok: true; data: { id: string; replacedDocumentId: string } }>(
+    `/v1/tenants/${tenantId}/documents/${encodeURIComponent(documentId)}/replace`,
+    { method: "POST", body: JSON.stringify(payload) },
+    { requireAppCheck: true }
+  );
+}
+
+export async function deleteDocumentLockerRecord(tenantId: string, documentId: string) {
+  return requestRaw<{ ok: true; data: { id: string } }>(
+    `/v1/tenants/${tenantId}/documents/${encodeURIComponent(documentId)}`,
+    { method: "DELETE" },
+    { requireAppCheck: true }
+  );
+}
+
 export async function patchListingMedia(tenantId: string, listingId: string, media: { hero?: any; gallery?: any[] }) {
   return apiClient.patch(`/v1/tenants/${tenantId}/listings/${listingId}`, { media }, { requireAppCheck: true });
 }
@@ -377,7 +740,7 @@ export async function patchProjectMedia(tenantId: string, projectId: string, med
 }
 
 export async function getMyPrincipals(tenantId: string) {
-  return apiClient.get<{ tenantId: string; principals: PrincipalScopeItem[] }>(
+  return requestRaw<{ ok: true; tenantId: string; principals: PrincipalScopeItem[] }>(
     `/v1/tenants/${tenantId}/principals/me`
   );
 }
@@ -741,6 +1104,133 @@ export async function rejectBusinessRequest(requestId: string, reason: string) {
   });
 }
 
+export async function acceptPublicInvite(token: string, uid: string) {
+  return requestRaw<{ ok: true; tenantId: string; role: string }>(`/v1/public/invites/accept`, {
+    method: "POST",
+    body: JSON.stringify({ token, uid })
+  });
+}
+
+export async function regeneratePlatformTenantAdminInvite(tenantId: string) {
+  return requestRaw<{ ok: true; data: RegenerateTenantAdminInviteResponse }>(
+    `/v1/platform/tenants/${tenantId}/admin-invite/regenerate`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+}
+
+export async function getPlatformAnalyticsSummary() {
+  return requestRaw<{ ok: true; data: PlatformAnalyticsSummary }>(`/v1/platform/analytics/summary`, {
+    method: "GET"
+  });
+}
+
+export async function listPlatformActivity(limit = 8) {
+  return requestRaw<{ ok: true; data: { items: PlatformActivityItem[] } }>(
+    `/v1/platform/analytics/activity${buildQuery({ limit })}`,
+    { method: "GET" }
+  );
+}
+
+export async function listPlatformBuyerRequests(params: { status?: string; citySlug?: string } = {}) {
+  return requestRaw<{ ok: true; data: { items: PlatformBuyerRequest[] } }>(
+    `/v1/platform/buyer-requests${buildQuery(params)}`,
+    { method: "GET" }
+  );
+}
+
+export async function getPlatformBuyerRequest(requestId: string) {
+  return requestRaw<{ ok: true; data: PlatformBuyerRequest }>(
+    `/v1/platform/buyer-requests/${encodeURIComponent(requestId)}`,
+    { method: "GET" }
+  );
+}
+
+export async function patchPlatformBuyerRequest(
+  requestId: string,
+  patch: { status?: "created" | "contacted" | "closed"; notes?: string; assignedTenantId?: string | null }
+) {
+  return requestRaw<{ ok: true; data: { requestId: string } }>(
+    `/v1/platform/buyer-requests/${encodeURIComponent(requestId)}`,
+    { method: "PATCH", body: JSON.stringify(patch) }
+  );
+}
+
+export async function createPlatformTenant(payload: Record<string, any>) {
+  return requestRaw<{ ok: true; data: PlatformTenantCreateResponse }>(`/v1/platform/tenants`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function downloadTenantOnboardingPack(tenantId: string) {
+  const headers: Record<string, string> = {};
+  if (currentIdToken) headers.Authorization = `Bearer ${currentIdToken}`;
+  if (currentTenantId) headers["x-tenant-id"] = currentTenantId;
+  const res = await fetch(`${API_BASE}/v1/platform/tenants/${encodeURIComponent(tenantId)}/onboarding-pack.pdf`, {
+    method: "GET",
+    headers
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => null);
+    throw new Error(json?.error?.message || res.statusText || "Failed to download onboarding pack");
+  }
+  return res.blob();
+}
+
+export async function getPlatformTenantDetail(tenantId: string) {
+  return requestRaw<{ ok: true; data: PlatformTenantDetail }>(
+    `/v1/platform/tenants/${encodeURIComponent(tenantId)}`,
+    { method: "GET" }
+  );
+}
+
+export async function updatePlatformTenantStatus(tenantId: string, status: "active" | "suspended" | "closed") {
+  return requestRaw<{ ok: true; data: { ok: true } }>(
+    `/v1/platform/tenants/${encodeURIComponent(tenantId)}/status`,
+    { method: "PATCH", body: JSON.stringify({ status }) }
+  );
+}
+
+export async function listPlatformTenantPayments(tenantId: string) {
+  return requestRaw<{ ok: true; data: { items: PlatformTenantPayment[] } }>(
+    `/v1/platform/tenants/${encodeURIComponent(tenantId)}/payments`,
+    { method: "GET" }
+  );
+}
+
+export async function createPlatformTenantPayment(
+  tenantId: string,
+  payload: {
+    billingCycle?: "monthly" | "yearly";
+    periodStart: string;
+    periodEnd: string;
+    amount: number;
+    mode: "NEFT" | "RTGS" | "IMPS" | "Cheque";
+    reference: string;
+    txnDate: string;
+    notes?: string;
+  }
+) {
+  return requestRaw<{ ok: true; data: { paymentId: string } }>(
+    `/v1/platform/tenants/${encodeURIComponent(tenantId)}/payments`,
+    { method: "POST", body: JSON.stringify(payload) }
+  );
+}
+
+export async function verifyPlatformTenantPayment(tenantId: string, paymentId: string) {
+  return requestRaw<{ ok: true; data: { ok: true } }>(
+    `/v1/platform/tenants/${encodeURIComponent(tenantId)}/payments/${encodeURIComponent(paymentId)}/verify`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+}
+
+export async function rejectPlatformTenantPayment(tenantId: string, paymentId: string, reason: string) {
+  return requestRaw<{ ok: true; data: { ok: true } }>(
+    `/v1/platform/tenants/${encodeURIComponent(tenantId)}/payments/${encodeURIComponent(paymentId)}/reject`,
+    { method: "POST", body: JSON.stringify({ reason }) }
+  );
+}
+
 export async function getBillingSubscription(tenantId?: string) {
   return requestRaw<BillingSubscriptionResponse>(
     `/v1/admin/billing/subscription${buildQuery({ tenantId })}`,
@@ -823,3 +1313,68 @@ export async function enableTeamUser(uid: string, tenantId?: string) {
     body: JSON.stringify({})
   });
 }
+
+export async function listApprovals(
+  tenantId: string,
+  params?: {
+    status?: string;
+    entityType?: string;
+    requestedByUid?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+    cursor?: string;
+  }
+) {
+  return requestRaw<{ ok: true; data: { items: Approval[]; nextCursor?: string } }>(
+    `/v1/tenants/${tenantId}/admin/approvals${buildQuery(params)}`,
+    { method: "GET" }
+  );
+}
+
+export async function approveApproval(tenantId: string, approvalId: string, payload?: { notes?: string }) {
+  return requestRaw<{ ok: true; data: { ok: true } }>(
+    `/v1/tenants/${tenantId}/admin/approvals/${approvalId}/approve`,
+    { method: "POST", body: JSON.stringify(payload || {}) },
+    { requireAppCheck: true }
+  );
+}
+
+export async function rejectApproval(
+  tenantId: string,
+  approvalId: string,
+  payload: { reason: string; notes?: string }
+) {
+  return requestRaw<{ ok: true; data: { ok: true } }>(
+    `/v1/tenants/${tenantId}/admin/approvals/${approvalId}/reject`,
+    { method: "POST", body: JSON.stringify(payload) },
+    { requireAppCheck: true }
+  );
+}
+
+export async function bulkApproveApprovals(tenantId: string, payload: { ids: string[]; notes?: string }) {
+  return requestRaw<{ ok: true; data: { results: { id: string; ok: boolean; error?: string }[] } }>(
+    `/v1/tenants/${tenantId}/admin/approvals/bulk/approve`,
+    { method: "POST", body: JSON.stringify(payload) },
+    { requireAppCheck: true }
+  );
+}
+
+export async function bulkRejectApprovals(
+  tenantId: string,
+  payload: { ids: string[]; reason: string; notes?: string }
+) {
+  return requestRaw<{ ok: true; data: { results: { id: string; ok: boolean; error?: string }[] } }>(
+    `/v1/tenants/${tenantId}/admin/approvals/bulk/reject`,
+    { method: "POST", body: JSON.stringify(payload) },
+    { requireAppCheck: true }
+  );
+}
+
+export async function getAnalyticsSummary(tenantId: string, range: string = "30d") {
+  return requestRaw<{ ok: true; data: AnalyticsSummary }>(
+    `/v1/tenants/${tenantId}/admin/analytics/summary${buildQuery({ range })}`,
+    { method: "GET" }
+  );
+}
+

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import PropertyCard from "../../components/PropertyCard";
-import { getPublicProperties } from "../../services/apiClient";
+import { getPublicProperties, syncTenantForCitySlug } from "../../services/apiClient";
 import { hydrateSignedUrls } from "../../services/signedMedia";
-import { isTargetCitySlug, TARGET_CITIES } from "../../constants/market";
+import { TARGET_CITIES } from "../../constants/market";
 import { buildLandingSeo, slugify } from "../../utils/seo";
 import { Helmet } from "react-helmet-async";
 
@@ -13,7 +13,6 @@ export default function PropertyLandingPage() {
   const { city, locality } = useParams();
   const citySlug = city ? slugify(city) : "";
   const localitySlug = locality ? slugify(locality) : "";
-  const validCity = isTargetCitySlug(citySlug);
 
   const [items, setItems] = useState<PublicProperty[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
@@ -24,9 +23,10 @@ export default function PropertyLandingPage() {
     async function load() {
       try {
         setLoading(true);
-        const data = await getPublicProperties();
+        await syncTenantForCitySlug(citySlug);
+        const data = await getPublicProperties({ citySlug, limit: 100 });
         const filtered = data.filter((p: any) => {
-          const pCity = slugify(p.location?.city || "");
+          const pCity = slugify(p.location?.citySlug || p.location?.city || "");
           const pLocality = slugify(p.location?.locality || "");
           if (pCity !== citySlug) return false;
           if (localitySlug) return pLocality === localitySlug;
@@ -39,12 +39,13 @@ export default function PropertyLandingPage() {
         setLoading(false);
       }
     }
-    if (validCity) load();
-    else {
+    if (!citySlug) {
       setError("City not found");
       setLoading(false);
+      return;
     }
-  }, [citySlug, localitySlug, validCity]);
+    void load();
+  }, [citySlug, localitySlug]);
 
   useEffect(() => {
     async function signVisible(list: PublicProperty[]) {

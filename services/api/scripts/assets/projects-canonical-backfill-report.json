@@ -1,0 +1,44 @@
+{
+  "scanned": 7,
+  "migrated": 0,
+  "skipped": 7,
+  "failed": 0,
+  "skippedItems": [
+    {
+      "id": "FHISzQO2wnQ228SCb7rY",
+      "tenantId": "demo-chandrapur",
+      "reason": "Already canonical"
+    },
+    {
+      "id": "JeZclNxTEeCiI5rBp9bP",
+      "tenantId": "demo-chandrapur",
+      "reason": "Already canonical"
+    },
+    {
+      "id": "QVVM1eSOAakC5XXBLtMt",
+      "tenantId": "demo-chandrapur",
+      "reason": "Already canonical"
+    },
+    {
+      "id": "b9pOItmPG2IjbFU2BUWa",
+      "tenantId": "demo-chandrapur",
+      "reason": "Already canonical"
+    },
+    {
+      "id": "d2kRFNp77xyz2b40EfnQ",
+      "tenantId": "demo-chandrapur",
+      "reason": "Already canonical"
+    },
+    {
+      "id": "yH72XYJZGmOfHp1AHftk",
+      "tenantId": "demo-chandrapur",
+      "reason": "Already canonical"
+    },
+    {
+      "id": "z9PIW9vUuEqW7maV9xyi",
+      "tenantId": "demo-chandrapur",
+      "reason": "Already canonical"
+    }
+  ],
+  "failures": []
+}
